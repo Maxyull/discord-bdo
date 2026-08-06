@@ -12,6 +12,8 @@ def clean_env(monkeypatch):
         "GITHUB_DEFAULT_LABELS",
         "DRY_RUN",
         "LOG_LEVEL",
+        "RUBIN_API_URL",
+        "RUBIN_API_TIMEOUT",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -68,3 +70,36 @@ def test_dry_run_parsing(monkeypatch, value, expected):
     monkeypatch.setenv("DISCORD_TOKEN", "abc")
     monkeypatch.setenv("DRY_RUN", value)
     assert cfg.load(env_file="does-not-exist").dry_run is expected
+
+
+class TestRubinApiSettings:
+    def test_the_default_points_at_the_live_api(self, monkeypatch):
+        monkeypatch.setenv("DISCORD_TOKEN", "abc")
+        conf = cfg.load(env_file="does-not-exist")
+        assert conf.rubin_api_url == "https://rubin.maxyull.fr"
+        assert conf.rubin_api_timeout == 5.0
+
+    def test_the_url_can_be_overridden(self, monkeypatch):
+        monkeypatch.setenv("DISCORD_TOKEN", "abc")
+        monkeypatch.setenv("RUBIN_API_URL", "https://essai.local")
+        assert cfg.load(env_file="does-not-exist").rubin_api_url == "https://essai.local"
+
+    def test_the_timeout_accepts_a_decimal(self, monkeypatch):
+        monkeypatch.setenv("DISCORD_TOKEN", "abc")
+        monkeypatch.setenv("RUBIN_API_TIMEOUT", "2.5")
+        assert cfg.load(env_file="does-not-exist").rubin_api_timeout == 2.5
+
+    def test_a_non_numeric_timeout_is_refused(self, monkeypatch):
+        monkeypatch.setenv("DISCORD_TOKEN", "abc")
+        monkeypatch.setenv("RUBIN_API_TIMEOUT", "vite")
+        with pytest.raises(cfg.ConfigError, match="nombre"):
+            cfg.load(env_file="does-not-exist")
+
+    @pytest.mark.parametrize("value", ["0", "-3"])
+    def test_a_non_positive_timeout_is_refused(self, monkeypatch, value):
+        # A zero timeout makes every call fail instantly and looks like an
+        # outage in the status board.
+        monkeypatch.setenv("DISCORD_TOKEN", "abc")
+        monkeypatch.setenv("RUBIN_API_TIMEOUT", value)
+        with pytest.raises(cfg.ConfigError, match="positif"):
+            cfg.load(env_file="does-not-exist")

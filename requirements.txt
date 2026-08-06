@@ -2,3 +2,8 @@ discord.py>=2.4,<3
 aiohttp>=3.9
 python-dotenv>=1.0
 aiosqlite>=0.19
+
+# The three Rubin lookup commands, imported from their own repo rather
+# than copied here: one maintained source, no drift between two public
+# repositories. Absent package simply means those commands are missing.
+rubin-bot @ git+https://github.com/Maxyull/rubin-bdo@main#subdirectory=bot

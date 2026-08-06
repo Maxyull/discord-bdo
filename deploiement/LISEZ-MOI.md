@@ -11,10 +11,25 @@
 Un dossier par bot sous `/opt/discordbot/`, un service systemd par bot, et un
 seul compte système `discordbot` non privilégié pour tous.
 
-⚠️ **`rubin-bot` n'est pas là.** Il tourne depuis `/opt/rubin-bot`, en service
-systemd `rubin-bot.service`, et il est **en ligne**. Le déplacer sous
-`/opt/discordbot/` couperait le service : à faire un jour, à froid, pas au
-passage.
+## ⚠️ Ce bot remplace rubin-bot
+
+Les deux utilisent la **même application Discord** (`Rubin`), donc le **même
+jeton**. Discord n'autorise qu'une session Gateway par identité : lancer les
+deux, c'est les voir se déconnecter mutuellement en boucle.
+
+**L'ordre compte** :
+
+```bash
+sudo systemctl disable --now rubin-bot     # d'abord couper l'ancien
+sudo bash deploiement/installer.sh         # ensuite installer celui-ci
+```
+
+Le jeton est déjà sur la machine, dans le fichier d'environnement de
+`rubin-bot`. Recopiez-le dans le `.env` de ce bot, sous le nom `DISCORD_TOKEN`.
+
+`/opt/rubin-bot` reste en place, non démarré : c'est le retour arrière si
+quelque chose cloche. `sudo systemctl enable --now rubin-bot` après avoir
+arrêté celui-ci, et on est revenu à l'état d'avant.
 
 ## Pourquoi systemd et pas Docker
 

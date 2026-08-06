@@ -27,13 +27,24 @@ def bot():
 class TestConstruction:
     def test_commands_are_registered_at_construction(self, bot):
         names = {cmd.name for cmd in bot.tree.get_commands()}
-        assert names == {"setup", "aide", "config", "etat", "version", "tester"}
+        own = {"setup", "aide", "config", "etat", "version", "tester"}
+        assert own <= names
 
-    def test_no_command_collides_with_the_rubin_bot(self, bot):
-        # rubin-bot is already connected to the same server and owns these.
-        # Two bots exposing the same slash command is a coin toss for the user.
-        rubin = {"rapides", "chaine", "quete"}
-        assert {c.name for c in bot.tree.get_commands()} & rubin == set()
+    def test_the_rubin_lookup_commands_are_absorbed(self, bot):
+        # This bot replaces rubin-bot rather than running beside it: two
+        # processes sharing one token fight over the same Gateway session and
+        # knock each other offline in a loop.
+        names = {c.name for c in bot.tree.get_commands()}
+        assert {"rapides", "chaine", "quete"} <= names
+
+    def test_the_rubin_api_client_is_built(self, bot):
+        assert bot.rubin_api is not None
+
+    def test_command_names_are_unique(self, bot):
+        # Two sources of commands now; a duplicate would be rejected by
+        # Discord at sync time, hours after the deploy.
+        names = [c.name for c in bot.tree.get_commands()]
+        assert len(names) == len(set(names))
 
     def test_tester_is_gated_on_managing_roles(self, bot):
         tester = next(c for c in bot.tree.get_commands() if c.name == "tester")
