@@ -48,6 +48,37 @@ SCREEN_FIELDS = ("resolution", "scaling", "ui_scale", "display_mode", "game_lang
 MACHINE_FIELDS = ("cpu", "gpu", "ram")
 DATA_FIELDS = SCREEN_FIELDS + MACHINE_FIELDS
 
+#: Fixed-value fields get a picker instead of a free-text box. Typing is where
+#: "fenetré sans bordure", "fenêtré sans bordures" and "borderless" come from,
+#: three spellings of one setting that then have to be reconciled by hand.
+#:
+#: Each entry is (stored value, what the member sees). The stored value is what
+#: lands in the database and in the GitHub issue, so it stays short and stable
+#: even if the label is reworded later.
+DISPLAY_MODES = (
+    ("plein écran", "Plein écran / Fullscreen"),
+    ("fenêtré sans bordure", "Fenêtré sans bordure / Borderless"),
+    ("fenêtré", "Fenêtré / Windowed"),
+)
+
+#: The values Windows actually offers in Display settings. "autre" covers the
+#: custom scaling box, which accepts anything from 100 to 500.
+WINDOWS_SCALES = (
+    ("100%", "100% (par défaut / default)"),
+    ("125%", "125%"),
+    ("150%", "150%"),
+    ("175%", "175%"),
+    ("200%", "200%"),
+    ("autre", "Autre / Other (personnalisée)"),
+)
+
+GAME_LANGUAGES = (
+    ("français", "Français"),
+    ("english", "English"),
+    ("autre", "Autre / Other"),
+)
+
+
 #: Bilingual labels for the Discord card.
 LABELS_FR_EN = (
     ("resolution", "Résolution / Resolution"),

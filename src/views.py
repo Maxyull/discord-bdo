@@ -15,9 +15,12 @@ from . import blueprint as bp
 from . import texts
 from .github_bridge import GitHubClient, GitHubError, IssueDraft, build_labels, truncate_title
 from .profiles import (
+    DISPLAY_MODES,
+    GAME_LANGUAGES,
     LABELS_EN,
     MACHINE_FIELDS,
     SCREEN_FIELDS,
+    WINDOWS_SCALES,
     Profile,
     ProfileStore,
     normalise_resolution,
@@ -488,6 +491,24 @@ class _BaseSetupModal(discord.ui.Modal):
         await _report_error(interaction)
 
 
+def _picker(choices, current: str, placeholder: str) -> discord.ui.Select:
+    """A dropdown whose stored value is preselected when there is one.
+
+    ``current`` is matched against the stored value, not the label: the label
+    can be reworded without orphaning every card already filled in.
+    """
+    options = [
+        discord.SelectOption(label=label, value=value, default=value == current)
+        for value, label in choices
+    ]
+    return discord.ui.Select(placeholder=placeholder, options=options, min_values=1, max_values=1)
+
+
+def _chosen(select: discord.ui.Select) -> str:
+    """The single selected value, or empty when the member picked nothing."""
+    return select.values[0] if select.values else ""
+
+
 def _previous(existing, attr):
     """Prefill value, or None so the field renders empty rather than "None"."""
     return (getattr(existing, attr, "") if existing else "") or None
@@ -511,11 +532,10 @@ class ScreenModal(_BaseSetupModal):
             default=_previous(existing, "resolution"),
             max_length=40,
         )
-        self.scaling = discord.ui.TextInput(
-            label=texts.FIELD_SCALING_LABEL,
-            placeholder=texts.FIELD_SCALING_PLACEHOLDER,
-            default=_previous(existing, "scaling"),
-            max_length=20,
+        self.scaling = _picker(
+            WINDOWS_SCALES,
+            getattr(existing, "scaling", "") if existing else "",
+            texts.FIELD_SCALING_PLACEHOLDER,
         )
         self.ui_scale = discord.ui.TextInput(
             label=texts.FIELD_UI_SCALE_LABEL,
@@ -523,37 +543,49 @@ class ScreenModal(_BaseSetupModal):
             default=_previous(existing, "ui_scale"),
             max_length=20,
         )
-        self.display_mode = discord.ui.TextInput(
-            label=texts.FIELD_DISPLAY_MODE_LABEL,
-            placeholder=texts.FIELD_DISPLAY_MODE_PLACEHOLDER,
-            default=_previous(existing, "display_mode"),
-            max_length=60,
+        self.display_mode = _picker(
+            DISPLAY_MODES,
+            getattr(existing, "display_mode", "") if existing else "",
+            texts.FIELD_DISPLAY_MODE_PLACEHOLDER,
         )
-        self.game_language = discord.ui.TextInput(
-            label=texts.FIELD_GAME_LANGUAGE_LABEL,
-            placeholder=texts.FIELD_GAME_LANGUAGE_PLACEHOLDER,
-            default=_previous(existing, "game_language"),
-            max_length=30,
-            required=False,
+        self.game_language = _picker(
+            GAME_LANGUAGES,
+            getattr(existing, "game_language", "") if existing else "",
+            texts.FIELD_GAME_LANGUAGE_PLACEHOLDER,
         )
-        for item in (
-            self.resolution,
-            self.scaling,
-            self.ui_scale,
-            self.display_mode,
-            self.game_language,
-        ):
-            self.add_item(item)
+        # A Select cannot carry its own label, it has to be wrapped. Text
+        # inputs still carry theirs, so only the pickers are wrapped here.
+        self.add_item(self.resolution)
+        self.add_item(
+            discord.ui.Label(
+                text=texts.FIELD_SCALING_LABEL,
+                description=texts.FIELD_SCALING_HINT,
+                component=self.scaling,
+            )
+        )
+        self.add_item(self.ui_scale)
+        self.add_item(
+            discord.ui.Label(
+                text=texts.FIELD_DISPLAY_MODE_LABEL, component=self.display_mode
+            )
+        )
+        self.add_item(
+            discord.ui.Label(
+                text=texts.FIELD_GAME_LANGUAGE_LABEL, component=self.game_language
+            )
+        )
 
     def collect(self) -> dict[str, str]:
         return {
             "resolution": normalise_resolution(self.resolution.value),
             # Both scales are percentages typed by hand, so the same tolerant
             # parser applies: "1.5", "150" and "150 %" all mean 150%.
-            "scaling": normalise_scaling(self.scaling.value),
+            # Picked from a list, so already canonical: no normalisation, and
+            # nothing to reconcile later.
+            "scaling": _chosen(self.scaling),
             "ui_scale": normalise_scaling(self.ui_scale.value),
-            "display_mode": self.display_mode.value.strip(),
-            "game_language": self.game_language.value.strip(),
+            "display_mode": _chosen(self.display_mode),
+            "game_language": _chosen(self.game_language),
         }
 
 

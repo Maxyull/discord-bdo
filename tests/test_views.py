@@ -5,7 +5,14 @@ from src import blueprint as bp
 from src import texts
 from src import views
 from src.github_bridge import GitHubError, IssueDraft
-from src.profiles import MACHINE_FIELDS, SCREEN_FIELDS, Profile
+from src.profiles import (
+    DISPLAY_MODES,
+    GAME_LANGUAGES,
+    MACHINE_FIELDS,
+    SCREEN_FIELDS,
+    WINDOWS_SCALES,
+    Profile,
+)
 
 
 class TestCustomIds:
@@ -336,22 +343,79 @@ class TestScreenModal:
         # Otherwise submitting it would blank the machine values.
         assert views.ScreenModal.COLUMNS == SCREEN_FIELDS
 
-    def test_fields_are_prefilled_from_an_existing_card(self):
+    def test_free_text_fields_are_prefilled_from_an_existing_card(self):
         existing = Profile(user_id=1, resolution="1920x1080", ui_scale="110%")
         modal = views.ScreenModal(handler(), existing)
         assert modal.resolution.default == "1920x1080"
         assert modal.ui_scale.default == "110%"
 
+    def test_a_picker_preselects_the_stored_value(self):
+        existing = Profile(user_id=1, scaling="150%", display_mode="fenêtré")
+        modal = views.ScreenModal(handler(), existing)
+        assert [o.value for o in modal.scaling.options if o.default] == ["150%"]
+        assert [o.value for o in modal.display_mode.options if o.default] == ["fenêtré"]
+
+    def test_preselection_matches_the_value_not_the_label(self):
+        # Rewording a label must not orphan every card already filled in.
+        existing = Profile(user_id=1, game_language="english")
+        modal = views.ScreenModal(handler(), existing)
+        choisi = [o for o in modal.game_language.options if o.default]
+        assert len(choisi) == 1 and choisi[0].value == "english"
+
+    def test_a_card_with_no_value_preselects_nothing(self):
+        modal = views.ScreenModal(handler())
+        assert not [o for o in modal.scaling.options if o.default]
+
+    def test_an_unknown_stored_value_preselects_nothing_rather_than_guessing(self):
+        # Cards filled in before the pickers existed can hold anything.
+        existing = Profile(user_id=1, display_mode="borderless windowed")
+        modal = views.ScreenModal(handler(), existing)
+        assert not [o for o in modal.display_mode.options if o.default]
+
     def test_missing_values_leave_the_field_blank_not_the_string_none(self):
         assert views.ScreenModal(handler()).resolution.default is None
 
-    def test_only_the_language_is_optional(self):
+    def test_the_free_text_fields_are_required(self):
         modal = views.ScreenModal(handler())
         assert modal.resolution.required is True
-        assert modal.scaling.required is True
         assert modal.ui_scale.required is True
-        assert modal.display_mode.required is True
-        assert modal.game_language.required is False
+
+    def test_the_fixed_value_fields_are_pickers(self):
+        # Typing is where "fenetré sans bordure" and "borderless" come from,
+        # three spellings of one setting that then have to be reconciled.
+        modal = views.ScreenModal(handler())
+        for champ in (modal.scaling, modal.display_mode, modal.game_language):
+            assert isinstance(champ, discord.ui.Select)
+
+    def test_a_picker_forces_exactly_one_answer(self):
+        modal = views.ScreenModal(handler())
+        for champ in (modal.scaling, modal.display_mode, modal.game_language):
+            assert champ.min_values == 1
+            assert champ.max_values == 1
+
+    def test_pickers_are_wrapped_in_a_label(self):
+        # A Select carries no label of its own; unwrapped, the member sees a
+        # dropdown with no idea what it is for.
+        modal = views.ScreenModal(handler())
+        etiquetes = [c for c in modal.children if isinstance(c, discord.ui.Label)]
+        assert len(etiquetes) == 3
+        assert all(e.text for e in etiquetes)
+
+    def test_every_offered_choice_carries_a_stored_value(self):
+        for choix in (WINDOWS_SCALES, DISPLAY_MODES, GAME_LANGUAGES):
+            for valeur, libelle in choix:
+                assert valeur and libelle
+
+    def test_choice_labels_fit_the_100_char_limit(self):
+        for choix in (WINDOWS_SCALES, DISPLAY_MODES, GAME_LANGUAGES):
+            for valeur, libelle in choix:
+                assert len(libelle) <= 100
+                assert len(valeur) <= 100
+
+    def test_windows_offers_a_custom_scaling_escape_hatch(self):
+        # Windows lets you type any value between 100 and 500; without this
+        # anyone off the standard steps could not answer at all.
+        assert any(v == "autre" for v, _ in WINDOWS_SCALES)
 
 
 class TestMachineModal:
@@ -379,31 +443,58 @@ class TestModalToProfile:
     def build(self, modal_class, **values):
         modal = modal_class(handler())
         for field, value in values.items():
-            getattr(modal, field)._value = value
+            champ = getattr(modal, field)
+            if isinstance(champ, discord.ui.Select):
+                # BaseSelect.values falls back to _values outside an interaction.
+                champ._values = [value] if value else []
+            else:
+                champ._value = value
         return modal
 
-    def test_screen_values_are_normalised_on_the_way_in(self):
+    def test_free_text_is_normalised_on_the_way_in(self):
         modal = self.build(
             views.ScreenModal,
             resolution="2560 * 1440",
-            scaling="1.5",
             ui_scale="110",
-            display_mode="  fenêtré  ",
+            scaling="150%",
+            display_mode="fenêtré",
             game_language="français",
         )
         profile = modal.to_profile(FakeUser())
         assert profile.resolution == "2560x1440"
-        assert profile.scaling == "150%"
         assert profile.ui_scale == "110%"
-        assert profile.display_mode == "fenêtré"
+
+    def test_picked_values_are_stored_verbatim(self):
+        # They come from a list, so they are already canonical: normalising
+        # them again could only corrupt a value we chose ourselves.
+        modal = self.build(
+            views.ScreenModal,
+            resolution="1920x1080",
+            ui_scale="100",
+            scaling="125%",
+            display_mode="fenêtré sans bordure",
+            game_language="english",
+        )
+        profile = modal.to_profile(FakeUser())
+        assert profile.scaling == "125%"
+        assert profile.display_mode == "fenêtré sans bordure"
+        assert profile.game_language == "english"
+
+    def test_an_untouched_picker_stores_nothing_rather_than_a_default(self):
+        modal = self.build(
+            views.ScreenModal, resolution="1920x1080", ui_scale="100"
+        )
+        profile = modal.to_profile(FakeUser())
+        assert profile.scaling == ""
+        assert profile.display_mode == ""
 
     def test_the_two_scales_stay_separate(self):
         modal = self.build(
             views.ScreenModal,
             resolution="1920x1080",
-            scaling="150",
+            scaling="150%",
             ui_scale="100",
-            display_mode="fullscreen",
+            display_mode="plein écran",
             game_language="",
         )
         profile = modal.to_profile(FakeUser())
@@ -423,7 +514,7 @@ class TestModalToProfile:
             resolution="1920x1080",
             scaling="100%",
             ui_scale="100%",
-            display_mode="fullscreen",
+            display_mode="plein écran",
             game_language="",
         ).to_profile(FakeUser())
         assert profile.user_id == 42
