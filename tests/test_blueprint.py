@@ -67,8 +67,48 @@ def test_forum_tags_start_with_the_new_state():
 
 
 def test_forum_tag_names_fit_discord_limit():
-    for tag in bp.BUG_TAGS + bp.IDEA_TAGS:
-        assert len(tag) <= 20, f"{tag!r} exceeds the 20-char forum tag limit"
+    # Every tag actually declared in the plan, not just the two lists that
+    # existed when this test was written.
+    for _, spec in bp.all_channel_specs():
+        for tag in spec.tags:
+            assert len(tag) <= 20, f"{tag!r} exceeds the 20-char forum tag limit"
+
+
+def test_forum_tag_names_are_unique_within_a_channel():
+    for _, spec in bp.all_channel_specs():
+        assert len(spec.tags) == len(set(spec.tags)), spec.name
+
+
+class TestGuideForum:
+    """One shared guide forum rather than one per tool."""
+
+    def spec(self):
+        by_key = {ch.key: ch for _, ch in bp.all_channel_specs() if ch.key}
+        return by_key[bp.KEY_GUIDES]
+
+    def test_it_is_a_forum_so_each_guide_is_its_own_thread(self):
+        assert self.spec().kind is bp.ChannelKind.FORUM
+
+    def test_members_cannot_open_a_guide_thread(self):
+        # Guides are reference material; anyone opening a thread would turn it
+        # into a second help channel.
+        assert self.spec().access is bp.Access.READ_ONLY
+
+    def test_both_tools_have_a_tag(self):
+        tags = self.spec().tags
+        assert any("Butin" in tag for tag in tags)
+        assert any("Rubin" in tag for tag in tags)
+
+    def test_the_product_tags_come_first(self):
+        # They are the filter people reach for, and Discord shows tags in order.
+        tags = self.spec().tags
+        assert "Butin" in tags[0] and "Rubin" in tags[1]
+
+    def test_it_sits_in_the_info_category_not_under_one_product(self):
+        category = next(
+            cat for cat, ch in bp.all_channel_specs() if ch.key == bp.KEY_GUIDES
+        )
+        assert "Infos" in category.name
 
 
 def test_product_lookup():

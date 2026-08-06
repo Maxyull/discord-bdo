@@ -23,7 +23,7 @@ Quatre choses vivent ici :
 ## Ce que le script construit
 
 ```
-📢 Infos            bienvenue-welcome · règles-rules · annonces-announcements
+📢 Infos            bienvenue-welcome · règles-rules · annonces-announcements · guides-tutoriels (forum)
 💬 Communauté       chat-fr · chat-en · captures-screenshots · Vocal
 🪙 Butin            butin-aide-help · butin-bugs (forum) · butin-suggestions (forum) · butin-versions-releases
 ⏱️ Rubin            rubin-aide-help · rubin-bugs (forum) · rubin-suggestions (forum) · rubin-versions-releases
@@ -52,6 +52,25 @@ au bon endroit.
 Les salons de bugs et de suggestions sont des **forums**, avec des étiquettes de suivi
 (`Nouveau`, `Confirmé`, `Corrigé`, `Rejeté`). Un sujet = un fil, donc rien ne se perd
 dans le défilement.
+
+### Les guides
+
+`#guides-tutoriels` est un forum, pas un salon texte : un guide d'installation noyé sous
+trois mois de messages n'est plus un guide. Un fil par sujet, filtrable par étiquette :
+
+`🪙 Butin` · `⏱️ Rubin` · `Installation` · `Calibrage / Setup` · `Astuce / Tip` · `Dépannage`
+
+Un seul forum pour les deux logiciels, avec les étiquettes qui font le tri, plutôt que
+deux salons à moitié vides. Les étiquettes produit sont en premier parce que c'est le
+filtre qu'on cherche en arrivant.
+
+**Seule l'équipe ouvre un fil**, mais tout le monde peut répondre dedans : une question
+posée sous le guide qu'elle concerne reste au bon endroit. C'est la raison pour laquelle
+le niveau « lecture seule » autorise les réponses en fil tout en interdisant d'ouvrir un
+sujet.
+
+Le forum est **vide au départ**, le script crée le salon et les étiquettes, pas le
+contenu.
 
 Le script **ne supprime jamais rien**. Relancé, il ne recrée que ce qui manque.
 
@@ -317,7 +336,7 @@ consultation croisée est réservée au staff, et une fiche se supprime sur dema
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-229 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
+236 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
 qui se télescopent une fois normalisés par Discord, limites de caractères des formulaires
 et des étiquettes), les tables de permissions y compris l'étanchéité de la catégorie
 bêta, le stockage des fiches, la normalisation des résolutions et des échelles, la
