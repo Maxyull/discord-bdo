@@ -242,11 +242,15 @@ Relancé deux fois, il détecte le webhook existant et ne fait rien.
 
 ## Faire tourner le bot
 
-> ⚠️ **Un autre bot est déjà sur ce serveur.** `rubin-bot`, le robot de consultation du
-> classement Rubin, tourne sur le VPS depuis `/opt/rubin-bot` et est connecté en
-> permanence. Il expose `/rapides`, `/chaine` et `/quete` ; aucune commande d'ici ne
-> porte ces noms, et un test le vérifie. Les deux bots sont complémentaires : celui-ci
-> gère le serveur, l'autre répond sur les temps de quête.
+> ⚠️ **Ce bot remplace `rubin-bot`.** Les deux partagent la même application Discord
+> (`Rubin`), donc le même jeton, et Discord n'autorise qu'une session Gateway par
+> identité : deux processus se déconnecteraient mutuellement en boucle.
+> `rubin-bot.service` doit être arrêté au moment du déploiement.
+>
+> Ses trois commandes `/rapides`, `/chaine` et `/quete` sont **reprises telles quelles**,
+> en important le paquet `rubin-bot` depuis le dépôt `rubin-bdo` plutôt qu'en recopiant
+> son code. Une seule source maintenue, pas deux copies qui divergent entre deux dépôts
+> publics.
 
 ### Sur le VPS
 
@@ -296,6 +300,9 @@ Discord affiche « L'interaction a échoué » au clic. Les fils déjà créés,
 | `/version` | Tout le monde | Dernières versions publiées, lues en direct sur GitHub |
 | `/etat` | Tout le monde | Relance les sondes et affiche l'état en direct |
 | `/tester @membre` | Staff | Donne le rôle `Tester`, `retirer:true` pour l'enlever |
+| `/rapides` | Tout le monde | Les chaînes de quêtes les plus rapides (repris de rubin-bot) |
+| `/chaine <numéro>` | Tout le monde | Le rythme mesuré sur une chaîne (repris de rubin-bot) |
+| `/quete <chaîne> <position>` | Tout le monde | Le temps médian d'une quête (repris de rubin-bot) |
 | `/config` | Tout le monde | Affiche sa fiche de configuration |
 | `/config @membre` | Staff | Affiche la fiche de quelqu'un d'autre |
 | `/aide` | Tout le monde | Rappelle où sont les boutons de rapport |
@@ -436,7 +443,7 @@ consultation croisée est réservée au staff, et une fiche se supprime sur dema
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-350 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
+358 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
 qui se télescopent une fois normalisés par Discord, limites de caractères des formulaires
 et des étiquettes), les tables de permissions y compris l'étanchéité de la catégorie
 bêta, le stockage des fiches, la normalisation des résolutions et des échelles, la

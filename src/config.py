@@ -38,6 +38,19 @@ def _get_int(name: str, *, required: bool = False) -> int | None:
         raise ConfigError(f"{name} doit être un nombre entier, reçu {raw!r}.") from None
 
 
+def _get_float(name: str, *, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = float(raw)
+    except ValueError:
+        raise ConfigError(f"{name} doit être un nombre, reçu {raw!r}.") from None
+    if value <= 0:
+        raise ConfigError(f"{name} doit être strictement positif, reçu {value}.")
+    return value
+
+
 def _get_str(name: str, *, required: bool = False, default: str = "") -> str:
     raw = os.environ.get(name, "").strip()
     if not raw:
@@ -60,6 +73,11 @@ class Config:
     dry_run: bool
     #: SQLite file holding the tester setup cards.
     profiles_path: str = "data/profiles.db"
+    #: Base URL of the Rubin ranking API, used by the /rapides, /chaine and
+    #: /quete commands absorbed from rubin-bot.
+    rubin_api_url: str = "https://rubin.maxyull.fr"
+    #: Seconds before the Rubin API is considered unreachable.
+    rubin_api_timeout: float = 5.0
 
     @property
     def github_enabled(self) -> bool:
@@ -87,4 +105,6 @@ def load(env_file: Path | str | None = None, *, require_token: bool = True) -> C
         log_level=_get_str("LOG_LEVEL", default="INFO").upper(),
         dry_run=_get_str("DRY_RUN", default="0") in {"1", "true", "yes", "oui"},
         profiles_path=_get_str("PROFILES_DB", default="data/profiles.db"),
+        rubin_api_url=_get_str("RUBIN_API_URL", default="https://rubin.maxyull.fr"),
+        rubin_api_timeout=_get_float("RUBIN_API_TIMEOUT", default=5.0),
     )

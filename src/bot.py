@@ -32,6 +32,20 @@ from .views import (
 )
 from .views import setup_embed as views_setup_embed
 
+# rubin-bot is a separate, installable package kept in the rubin-bdo repo. It is
+# imported rather than copied: duplicating a maintained module across two public
+# repositories guarantees the two copies drift. Missing package means the three
+# lookup commands are absent, not that the bot refuses to start.
+try:
+    from rubin_bot.api import RubinApi
+    from rubin_bot.bot import register_commands as register_rubin_commands
+
+    RUBIN_AVAILABLE = True
+except ImportError:  # pragma: no cover - exercised only without the package
+    RubinApi = None  # type: ignore[assignment]
+    register_rubin_commands = None  # type: ignore[assignment]
+    RUBIN_AVAILABLE = False
+
 log = logging.getLogger("discord-bdo.bot")
 
 #: Attachment types counted as a usable screenshot.
@@ -63,6 +77,12 @@ class BdoBot(discord.Client):
         self.github = GitHubClient(config.github_token) if config.github_token else None
         self.profiles = ProfileStore(config.profiles_path)
         self.releases = ReleaseClient(config.github_token)
+        #: Client for the Rubin ranking API, None when the package is absent.
+        self.rubin_api = (
+            RubinApi(base_url=config.rubin_api_url, timeout=config.rubin_api_timeout)
+            if RUBIN_AVAILABLE
+            else None
+        )
         #: Filled on ready, per guild id.
         self.channels_by_guild: dict[int, dict[str, discord.abc.GuildChannel]] = {}
         #: Last published status snapshot, so the board is only rewritten when
@@ -74,6 +94,11 @@ class BdoBot(discord.Client):
         # Registered here rather than in setup_hook so the command list can be
         # inspected without connecting to Discord.
         register_commands(self)
+        if self.rubin_api is not None:
+            # /rapides, /chaine, /quete, straight from rubin-bot. This bot
+            # replaces it: two processes on one token fight over the same
+            # Gateway session and knock each other offline in a loop.
+            register_rubin_commands(self.tree, self.rubin_api)
 
     # -- lifecycle ---------------------------------------------------------- #
 
@@ -87,6 +112,14 @@ class BdoBot(discord.Client):
         else:
             await self.tree.sync()
             log.info("slash commands synced globally (can take up to an hour)")
+
+    async def close(self) -> None:
+        if self.rubin_api is not None:
+            try:
+                await self.rubin_api.aclose()
+            except Exception:  # never let cleanup mask the real shutdown
+                log.warning("could not close the Rubin API session", exc_info=True)
+        await super().close()
 
     async def on_ready(self) -> None:
         for guild in self.guilds:
