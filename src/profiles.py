@@ -1,10 +1,14 @@
-"""Persistent hardware profiles, one per Discord member.
+"""Persistent setup cards, one per Discord member.
 
-Butin and Rubin both read the screen. Which means a bug report is nearly
-useless without the resolution, the Windows display scaling and the game's
-display mode: the same build behaves differently at 1920x1080 100% and at
-2560x1440 150%. Asking for it once and reusing it on every later report is the
+Butin and Rubin both read the screen. A bug report is nearly useless without
+the resolution, the Windows display scaling, the game's own interface scale
+and its display mode: the same build behaves differently at 1920x1080 100% and
+at 2560x1440 150%. Asking once and reusing it on every later report is the
 whole point of this module.
+
+The card is split in two forms because Discord caps a modal at five fields:
+the screen half drives OCR behaviour, the machine half only explains slowness.
+:meth:`ProfileStore.save` takes ``only`` so one form never blanks the other.
 
 SQLite through :mod:`aiosqlite`, one small table. The database path is
 configurable so tests run entirely in memory.
@@ -24,16 +28,49 @@ DEFAULT_PATH = Path("data") / "profiles.db"
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS profiles (
-    user_id      INTEGER PRIMARY KEY,
-    display_name TEXT    NOT NULL DEFAULT '',
-    resolution   TEXT    NOT NULL DEFAULT '',
-    scaling      TEXT    NOT NULL DEFAULT '',
-    display_mode TEXT    NOT NULL DEFAULT '',
-    game_language TEXT   NOT NULL DEFAULT '',
-    hardware     TEXT    NOT NULL DEFAULT '',
-    updated_at   TEXT    NOT NULL DEFAULT (datetime('now'))
+    user_id       INTEGER PRIMARY KEY,
+    display_name  TEXT NOT NULL DEFAULT '',
+    resolution    TEXT NOT NULL DEFAULT '',
+    scaling       TEXT NOT NULL DEFAULT '',
+    ui_scale      TEXT NOT NULL DEFAULT '',
+    display_mode  TEXT NOT NULL DEFAULT '',
+    game_language TEXT NOT NULL DEFAULT '',
+    cpu           TEXT NOT NULL DEFAULT '',
+    gpu           TEXT NOT NULL DEFAULT '',
+    ram           TEXT NOT NULL DEFAULT '',
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
+
+#: Columns filled by the screen form, in display order.
+SCREEN_FIELDS = ("resolution", "scaling", "ui_scale", "display_mode", "game_language")
+#: Columns filled by the machine form.
+MACHINE_FIELDS = ("cpu", "gpu", "ram")
+DATA_FIELDS = SCREEN_FIELDS + MACHINE_FIELDS
+
+#: Bilingual labels for the Discord card.
+LABELS_FR_EN = (
+    ("resolution", "Résolution / Resolution"),
+    ("scaling", "Échelle Windows / Windows scaling"),
+    ("ui_scale", "Échelle de l'interface (jeu) / Game UI scale"),
+    ("display_mode", "Affichage du jeu / Display mode"),
+    ("game_language", "Langue du jeu / Game language"),
+    ("cpu", "Processeur / CPU"),
+    ("gpu", "Carte graphique / GPU"),
+    ("ram", "Mémoire / RAM"),
+)
+
+#: English-only labels for the GitHub issue table.
+LABELS_EN = (
+    ("resolution", "Resolution"),
+    ("scaling", "Windows scaling"),
+    ("ui_scale", "Game UI scale"),
+    ("display_mode", "Display mode"),
+    ("game_language", "Game language"),
+    ("cpu", "CPU"),
+    ("gpu", "GPU"),
+    ("ram", "RAM"),
+)
 
 
 @dataclass(frozen=True)
@@ -44,23 +81,22 @@ class Profile:
     resolution: str = ""
     #: Windows display scaling, e.g. "150%".
     scaling: str = ""
+    #: The game's own interface scale, "Échelle de l'interface" in BDO's
+    #: options. Independent from the Windows one, and it changes the size of
+    #: the chat text the OCR reads, so both are needed.
+    ui_scale: str = ""
     #: Fullscreen / borderless / windowed, as typed.
     display_mode: str = ""
     #: In-game language, which drives which OCR dictionary applies.
     game_language: str = ""
-    #: Free text: CPU, GPU, RAM.
-    hardware: str = ""
+    cpu: str = ""
+    gpu: str = ""
+    ram: str = ""
     updated_at: str = ""
 
     def as_lines(self) -> list[str]:
         """Human-readable rows, skipping anything left blank."""
-        labels = (
-            ("resolution", "Résolution / Resolution"),
-            ("scaling", "Échelle Windows / Scaling"),
-            ("display_mode", "Affichage du jeu / Display mode"),
-            ("game_language", "Langue du jeu / Game language"),
-            ("hardware", "Matériel / Hardware"),
-        )
+        labels = LABELS_FR_EN
         return [
             f"**{label}** : {getattr(self, attr)}"
             for attr, label in labels
@@ -69,14 +105,11 @@ class Profile:
 
     def as_markdown_table(self) -> str:
         """Compact table for a GitHub issue body."""
-        rows = [
-            ("Resolution", self.resolution),
-            ("Scaling", self.scaling),
-            ("Display mode", self.display_mode),
-            ("Game language", self.game_language),
-            ("Hardware", self.hardware),
+        kept = [
+            (label, getattr(self, attr))
+            for attr, label in LABELS_EN
+            if getattr(self, attr)
         ]
-        kept = [(name, value) for name, value in rows if value]
         if not kept:
             return ""
         lines = ["| | |", "|---|---|"]
@@ -85,9 +118,12 @@ class Profile:
 
     @property
     def is_empty(self) -> bool:
-        return not any(
-            (self.resolution, self.scaling, self.display_mode, self.game_language, self.hardware)
-        )
+        return not any(getattr(self, name) for name in DATA_FIELDS)
+
+    @property
+    def has_screen_info(self) -> bool:
+        """Whether the part that actually matters for OCR is filled in."""
+        return any(getattr(self, name) for name in SCREEN_FIELDS)
 
 
 class ProfileStore:
@@ -133,34 +169,39 @@ class ProfileStore:
             await self._memory.close()
             self._memory = None
 
-    async def save(self, profile: Profile) -> None:
+    async def save(
+        self, profile: Profile, only: tuple[str, ...] | None = None
+    ) -> None:
+        """Store a profile.
+
+        ``only`` restricts the write to those columns, which is what keeps the
+        two forms from erasing each other: submitting the machine form must not
+        blank the screen values the member filled in last week.
+        """
+        if only is not None:
+            unknown = set(only) - set(DATA_FIELDS)
+            if unknown:
+                raise ValueError(f"unknown profile columns: {sorted(unknown)}")
+
+        # Built from DATA_FIELDS rather than spelled out, so adding a column to
+        # the schema does not mean editing three parallel lists by hand.
+        columns = ("display_name",) + (only if only is not None else DATA_FIELDS)
+        placeholders = ", ".join("?" for _ in columns)
+        assignments = ", ".join(f"{name} = excluded.{name}" for name in columns)
+        sql = f"""
+            INSERT INTO profiles (user_id, {", ".join(columns)}, updated_at)
+            VALUES (?, {placeholders}, datetime('now'))
+            ON CONFLICT(user_id) DO UPDATE SET
+                    {assignments},
+                    updated_at = datetime('now')
+        """
+        values = (profile.user_id,) + tuple(
+            getattr(profile, name) for name in columns
+        )
+
         connection = await self.connect()
         try:
-            await connection.execute(
-                """
-                INSERT INTO profiles
-                    (user_id, display_name, resolution, scaling, display_mode,
-                     game_language, hardware, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-                ON CONFLICT(user_id) DO UPDATE SET
-                    display_name = excluded.display_name,
-                    resolution   = excluded.resolution,
-                    scaling      = excluded.scaling,
-                    display_mode = excluded.display_mode,
-                    game_language= excluded.game_language,
-                    hardware     = excluded.hardware,
-                    updated_at   = datetime('now')
-                """,
-                (
-                    profile.user_id,
-                    profile.display_name,
-                    profile.resolution,
-                    profile.scaling,
-                    profile.display_mode,
-                    profile.game_language,
-                    profile.hardware,
-                ),
-            )
+            await connection.execute(sql, values)
             await connection.commit()
         finally:
             if not self.in_memory:

@@ -173,35 +173,44 @@ Discord thread: {thread_url}
 """
 
 # --------------------------------------------------------------------------- #
-# Beta: hardware profile
+# Setup card (screen + machine)
 # --------------------------------------------------------------------------- #
 
 SETUP_PANEL_TITLE = "🖥️ Ma configuration / My setup"
 
-SETUP_PANEL_BODY = """\
-**🇫🇷** Butin et Rubin **lisent votre écran**. La même version ne se comporte pas pareil en 1920x1080 à 100 % et en 2560x1440 à 150 %, ni en plein écran et en fenêtré.
+SETUP_PANEL_BODY = """**🇫🇷** Butin et Rubin **lisent votre écran**. Le même exécutable ne se comporte pas pareil en 1920x1080 à 100 % et en 2560x1440 à 150 %, ni en plein écran et en fenêtré. L'échelle de l'interface du jeu compte autant : elle change la taille du texte à lire.
 
-Remplissez cette fiche **une seule fois** : elle sera jointe automatiquement à tous vos rapports de bug, et vous n'aurez plus jamais à redonner ces informations.
+Remplissez cette fiche **une seule fois**. Elle sera jointe automatiquement à tous vos rapports de bug, et vous n'aurez plus jamais à redonner ces informations.
 
-**🇬🇧** Butin and Rubin **read your screen**. The same build behaves differently at 1920x1080 100% and at 2560x1440 150%, and differently again in fullscreen versus borderless.
+**🇬🇧** Butin and Rubin **read your screen**. The same build behaves differently at 1920x1080 100% and at 2560x1440 150%, and differently again in fullscreen versus borderless. The game's own interface scale matters just as much: it changes the size of the text being read.
 
-Fill this in **once**: it gets attached to every bug report you send afterwards, so you never have to repeat it.
+Fill this in **once**: it gets attached to every bug report you send afterwards.
 """
 
-BTN_SETUP = "🖥️ Remplir ma config / Fill in my setup"
+BTN_SETUP_SCREEN = "🖥️ Mon écran et mon jeu / My screen"
+BTN_SETUP_MACHINE = "⚙️ Ma machine / My PC"
 BTN_SETUP_SHOW = "👁️ Voir ma config / Show my setup"
 
-MODAL_SETUP_TITLE = "Ma configuration / My setup"
+MODAL_SCREEN_TITLE = "Mon écran et mon jeu / Screen"
+MODAL_MACHINE_TITLE = "Ma machine / My PC"
+
 FIELD_RESOLUTION_LABEL = "Résolution écran / Screen resolution"
 FIELD_RESOLUTION_PLACEHOLDER = "2560x1440"
 FIELD_SCALING_LABEL = "Échelle Windows / Windows scaling"
 FIELD_SCALING_PLACEHOLDER = "100%, 125%, 150%... (Paramètres > Affichage)"
+FIELD_UI_SCALE_LABEL = "Échelle de l'interface (jeu)"
+FIELD_UI_SCALE_PLACEHOLDER = "Options du jeu > Écran > Échelle de l'interface"
 FIELD_DISPLAY_MODE_LABEL = "Affichage du jeu / Game display mode"
 FIELD_DISPLAY_MODE_PLACEHOLDER = "plein écran, fenêtré sans bordure, fenêtré"
 FIELD_GAME_LANGUAGE_LABEL = "Langue du jeu / Game language"
 FIELD_GAME_LANGUAGE_PLACEHOLDER = "français, english..."
-FIELD_HARDWARE_LABEL = "Processeur, carte graphique, RAM"
-FIELD_HARDWARE_PLACEHOLDER = "Ryzen 5 5600 / RTX 3060 / 16 Go"
+
+FIELD_CPU_LABEL = "Processeur / CPU"
+FIELD_CPU_PLACEHOLDER = "Ryzen 5 5600"
+FIELD_GPU_LABEL = "Carte graphique / Graphics card"
+FIELD_GPU_PLACEHOLDER = "RTX 3060"
+FIELD_RAM_LABEL = "Mémoire vive / RAM"
+FIELD_RAM_PLACEHOLDER = "16 Go"
 
 SETUP_CARD = """\
 **Configuration de {author}**
@@ -215,9 +224,9 @@ SETUP_SAVED = (
     "Setup saved. It will be attached to your next reports."
 )
 SETUP_EMPTY = (
-    "Vous n'avez pas encore de fiche. Utilisez le bouton "
-    "« Remplir ma config » dans {channel}.\n"
-    "You have no setup yet, use the \"Fill in my setup\" button in {channel}."
+    "Vous n'avez pas encore de fiche. Le bouton « Mon écran et mon jeu » "
+    "est dans {channel}.\n"
+    "You have no setup yet, the \"My screen\" button is in {channel}."
 )
 SETUP_MISSING_IN_REPORT = (
     "\n*Pas de fiche de configuration. / No setup on file.*"

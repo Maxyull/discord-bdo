@@ -5,7 +5,7 @@ from src import blueprint as bp
 from src import texts
 from src import views
 from src.github_bridge import GitHubError, IssueDraft
-from src.profiles import Profile
+from src.profiles import MACHINE_FIELDS, SCREEN_FIELDS, Profile
 
 
 class TestCustomIds:
@@ -267,9 +267,12 @@ class TestTextsAreBilingual:
             texts.FIELD_PROBLEM_LABEL,
             texts.FIELD_RESOLUTION_LABEL,
             texts.FIELD_SCALING_LABEL,
+            texts.FIELD_UI_SCALE_LABEL,
             texts.FIELD_DISPLAY_MODE_LABEL,
             texts.FIELD_GAME_LANGUAGE_LABEL,
-            texts.FIELD_HARDWARE_LABEL,
+            texts.FIELD_CPU_LABEL,
+            texts.FIELD_GPU_LABEL,
+            texts.FIELD_RAM_LABEL,
         ):
             assert len(label) <= 45, label
 
@@ -278,12 +281,17 @@ class TestTextsAreBilingual:
             if name.endswith("_PLACEHOLDER"):
                 assert len(getattr(texts, name)) <= 100, name
 
-    def test_setup_modal_title_fits_the_45_char_limit(self):
-        assert len(texts.MODAL_SETUP_TITLE) <= 45
+    def test_setup_modal_titles_fit_the_45_char_limit(self):
+        assert len(texts.MODAL_SCREEN_TITLE) <= 45
+        assert len(texts.MODAL_MACHINE_TITLE) <= 45
 
     def test_setup_buttons_fit_the_80_char_limit(self):
-        assert len(texts.BTN_SETUP) <= 80
-        assert len(texts.BTN_SETUP_SHOW) <= 80
+        for label in (
+            texts.BTN_SETUP_SCREEN,
+            texts.BTN_SETUP_MACHINE,
+            texts.BTN_SETUP_SHOW,
+        ):
+            assert len(label) <= 80, label
 
     def test_beta_welcome_is_bilingual_and_fits_an_embed(self):
         assert "🇫🇷" in texts.BETA_WELCOME_BODY and "🇬🇧" in texts.BETA_WELCOME_BODY
@@ -295,46 +303,71 @@ class TestTextsAreBilingual:
 
 
 class TestSetupPanel:
-    def test_two_persistent_buttons_with_stable_ids(self):
+    def test_three_persistent_buttons_with_stable_ids(self):
         handler = views.ReportHandler(channels={}, github=None)
         panel = views.SetupPanel(handler)
         assert panel.timeout is None
         assert {item.custom_id for item in panel.children} == {
-            views.SETUP_EDIT_ID,
+            views.SETUP_SCREEN_ID,
+            views.SETUP_MACHINE_ID,
             views.SETUP_SHOW_ID,
         }
 
     def test_setup_ids_do_not_collide_with_product_ids(self):
         product_ids = {views.bug_button_id(p.slug) for p in bp.PRODUCTS}
         product_ids |= {views.idea_button_id(p.slug) for p in bp.PRODUCTS}
-        assert views.SETUP_EDIT_ID not in product_ids
-        assert views.SETUP_SHOW_ID not in product_ids
+        for setup_id in (
+            views.SETUP_SCREEN_ID,
+            views.SETUP_MACHINE_ID,
+            views.SETUP_SHOW_ID,
+        ):
+            assert setup_id not in product_ids
 
 
-class TestSetupModal:
+def handler():
+    return views.ReportHandler(channels={}, github=None)
+
+
+class TestScreenModal:
     def test_exactly_five_fields_which_is_the_discord_maximum(self):
-        modal = views.SetupModal(views.ReportHandler(channels={}, github=None))
-        assert len(modal.children) == 5
+        assert len(views.ScreenModal(handler()).children) == 5
+
+    def test_it_writes_only_the_screen_columns(self):
+        # Otherwise submitting it would blank the machine values.
+        assert views.ScreenModal.COLUMNS == SCREEN_FIELDS
 
     def test_fields_are_prefilled_from_an_existing_card(self):
-        existing = Profile(user_id=1, resolution="1920x1080", scaling="100%")
-        modal = views.SetupModal(
-            views.ReportHandler(channels={}, github=None), existing
-        )
+        existing = Profile(user_id=1, resolution="1920x1080", ui_scale="110%")
+        modal = views.ScreenModal(handler(), existing)
         assert modal.resolution.default == "1920x1080"
-        assert modal.scaling.default == "100%"
+        assert modal.ui_scale.default == "110%"
 
     def test_missing_values_leave_the_field_blank_not_the_string_none(self):
-        modal = views.SetupModal(views.ReportHandler(channels={}, github=None))
-        assert modal.resolution.default is None
+        assert views.ScreenModal(handler()).resolution.default is None
 
-    def test_only_resolution_scaling_and_mode_are_required(self):
-        modal = views.SetupModal(views.ReportHandler(channels={}, github=None))
+    def test_only_the_language_is_optional(self):
+        modal = views.ScreenModal(handler())
         assert modal.resolution.required is True
         assert modal.scaling.required is True
+        assert modal.ui_scale.required is True
         assert modal.display_mode.required is True
         assert modal.game_language.required is False
-        assert modal.hardware.required is False
+
+
+class TestMachineModal:
+    def test_three_fields(self):
+        assert len(views.MachineModal(handler()).children) == 3
+
+    def test_it_writes_only_the_machine_columns(self):
+        assert views.MachineModal.COLUMNS == MACHINE_FIELDS
+
+    def test_every_field_is_optional(self):
+        modal = views.MachineModal(handler())
+        assert all(item.required is False for item in modal.children)
+
+    def test_fields_are_prefilled(self):
+        modal = views.MachineModal(handler(), Profile(user_id=1, gpu="RTX 3060"))
+        assert modal.gpu.default == "RTX 3060"
 
 
 class FakeUser:
@@ -342,30 +375,56 @@ class FakeUser:
     display_name = "Testeur"
 
 
-class TestSetupModalToProfile:
-    def build(self, **values):
-        modal = views.SetupModal(views.ReportHandler(channels={}, github=None))
+class TestModalToProfile:
+    def build(self, modal_class, **values):
+        modal = modal_class(handler())
         for field, value in values.items():
             getattr(modal, field)._value = value
         return modal
 
-    def test_values_are_normalised_on_the_way_in(self):
+    def test_screen_values_are_normalised_on_the_way_in(self):
         modal = self.build(
+            views.ScreenModal,
             resolution="2560 * 1440",
             scaling="1.5",
+            ui_scale="110",
             display_mode="  fenêtré  ",
             game_language="français",
-            hardware="RTX  3060\n16 Go",
         )
         profile = modal.to_profile(FakeUser())
         assert profile.resolution == "2560x1440"
         assert profile.scaling == "150%"
+        assert profile.ui_scale == "110%"
         assert profile.display_mode == "fenêtré"
-        assert profile.hardware == "RTX 3060 16 Go"
+
+    def test_the_two_scales_stay_separate(self):
+        modal = self.build(
+            views.ScreenModal,
+            resolution="1920x1080",
+            scaling="150",
+            ui_scale="100",
+            display_mode="fullscreen",
+            game_language="",
+        )
+        profile = modal.to_profile(FakeUser())
+        assert (profile.scaling, profile.ui_scale) == ("150%", "100%")
+
+    def test_machine_values_are_whitespace_collapsed(self):
+        modal = self.build(
+            views.MachineModal, cpu="Ryzen  5\n5600", gpu="RTX 3060", ram=" 16 Go "
+        )
+        profile = modal.to_profile(FakeUser())
+        assert profile.cpu == "Ryzen 5 5600"
+        assert profile.ram == "16 Go"
 
     def test_the_discord_user_id_is_the_key(self):
         profile = self.build(
-            resolution="1920x1080", scaling="100%", display_mode="fullscreen"
+            views.ScreenModal,
+            resolution="1920x1080",
+            scaling="100%",
+            ui_scale="100%",
+            display_mode="fullscreen",
+            game_language="",
         ).to_profile(FakeUser())
         assert profile.user_id == 42
         assert profile.display_name == "Testeur"
@@ -376,7 +435,7 @@ class TestProfileFailuresAreSurvivable:
         async def get(self, user_id):
             raise RuntimeError("database is locked")
 
-        async def save(self, profile):
+        async def save(self, profile, only=None):
             raise RuntimeError("disk full")
 
     async def test_a_broken_lookup_returns_none_instead_of_raising(self):

@@ -1,6 +1,8 @@
 import pytest
 
 from src.profiles import (
+    MACHINE_FIELDS,
+    SCREEN_FIELDS,
     Profile,
     ProfileStore,
     normalise_resolution,
@@ -21,9 +23,12 @@ SAMPLE = Profile(
     display_name="Maxyull",
     resolution="2560x1440",
     scaling="150%",
+    ui_scale="110%",
     display_mode="fenêtré sans bordure",
     game_language="français",
-    hardware="Ryzen 5 5600 / RTX 3060 / 16 Go",
+    cpu="Ryzen 5 5600",
+    gpu="RTX 3060",
+    ram="16 Go",
 )
 
 
@@ -36,7 +41,9 @@ class TestStore:
         loaded = await store.get(7)
         assert loaded.resolution == "2560x1440"
         assert loaded.display_mode == "fenêtré sans bordure"
-        assert loaded.hardware.startswith("Ryzen")
+        assert loaded.ui_scale == "110%"
+        assert loaded.cpu == "Ryzen 5 5600"
+        assert loaded.gpu == "RTX 3060"
 
     async def test_saving_twice_updates_rather_than_duplicates(self, store):
         await store.save(SAMPLE)
@@ -67,6 +74,45 @@ class TestStore:
         assert await store.count() == 1
 
 
+class TestPartialSave:
+    """The two forms must not erase each other's columns."""
+
+    async def test_machine_form_keeps_the_screen_values(self, store):
+        await store.save(
+            Profile(user_id=1, resolution="2560x1440", ui_scale="110%"),
+            only=SCREEN_FIELDS,
+        )
+        await store.save(Profile(user_id=1, cpu="Ryzen 5"), only=MACHINE_FIELDS)
+        loaded = await store.get(1)
+        assert loaded.resolution == "2560x1440"
+        assert loaded.ui_scale == "110%"
+        assert loaded.cpu == "Ryzen 5"
+
+    async def test_screen_form_keeps_the_machine_values(self, store):
+        await store.save(Profile(user_id=1, cpu="Ryzen 5", ram="16 Go"), only=MACHINE_FIELDS)
+        await store.save(Profile(user_id=1, resolution="800x600"), only=SCREEN_FIELDS)
+        loaded = await store.get(1)
+        assert loaded.cpu == "Ryzen 5"
+        assert loaded.ram == "16 Go"
+        assert loaded.resolution == "800x600"
+
+    async def test_a_full_save_still_overwrites_everything(self, store):
+        await store.save(SAMPLE)
+        await store.save(Profile(user_id=7, resolution="800x600"))
+        loaded = await store.get(7)
+        assert loaded.resolution == "800x600"
+        assert loaded.cpu == ""
+
+    async def test_an_unknown_column_is_refused_rather_than_ignored(self, store):
+        with pytest.raises(ValueError, match="unknown profile columns"):
+            await store.save(Profile(user_id=1), only=("nope",))
+
+    async def test_updating_one_form_refreshes_the_timestamp(self, store):
+        await store.save(SAMPLE)
+        await store.save(Profile(user_id=7, cpu="i5"), only=MACHINE_FIELDS)
+        assert (await store.get(7)).updated_at
+
+
 class TestProfileRendering:
     def test_empty_profile_is_flagged(self):
         assert Profile(user_id=1).is_empty is True
@@ -86,6 +132,17 @@ class TestProfileRendering:
         table = Profile(user_id=1, resolution="800x600", scaling="100%").as_markdown_table()
         assert table.count("|\n") >= 2
         assert "Display mode" not in table
+
+    def test_both_scales_are_distinct_rows(self):
+        # Windows scaling and the game's UI scale are independent settings;
+        # collapsing them would lose the one that explains the bug.
+        table = Profile(user_id=1, scaling="150%", ui_scale="110%").as_markdown_table()
+        assert "| Windows scaling | 150% |" in table
+        assert "| Game UI scale | 110% |" in table
+
+    def test_screen_info_is_tracked_separately_from_the_machine(self):
+        assert Profile(user_id=1, cpu="Ryzen").has_screen_info is False
+        assert Profile(user_id=1, resolution="800x600").has_screen_info is True
 
     def test_markdown_table_is_empty_for_an_empty_profile(self):
         assert Profile(user_id=1).as_markdown_table() == ""

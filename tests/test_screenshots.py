@@ -49,9 +49,10 @@ PROFILE = Profile(
     user_id=1,
     resolution="2560x1440",
     scaling="150%",
+    ui_scale="110%",
     display_mode="fenêtré sans bordure",
     game_language="français",
-    hardware="RTX 3060",
+    gpu="RTX 3060",
 )
 
 
@@ -76,7 +77,13 @@ class TestSetupInjection:
 
     def test_rows_skip_blank_fields(self):
         rows = format_setup_rows(Profile(user_id=1, resolution="800x600"))
-        assert "Scaling" not in rows
+        assert "scaling" not in rows.lower()
+
+    def test_the_game_ui_scale_reaches_the_report(self):
+        # The setting the user asked for by name: it changes the size of the
+        # text being read, independently of the Windows scaling.
+        assert "110%" in format_setup_block(PROFILE)
+        assert "| Game UI scale | 110% |" in format_setup_rows(PROFILE)
 
     def test_rows_are_empty_without_a_profile(self):
         assert format_setup_rows(None) == ""
