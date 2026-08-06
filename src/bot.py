@@ -35,10 +35,13 @@ class BdoBot(discord.Client):
         #: Filled on ready, per guild id.
         self.channels_by_guild: dict[int, dict[str, discord.abc.GuildChannel]] = {}
 
+        # Registered here rather than in setup_hook so the command list can be
+        # inspected without connecting to Discord.
+        register_commands(self)
+
     # -- lifecycle ---------------------------------------------------------- #
 
     async def setup_hook(self) -> None:
-        register_commands(self)
         if self.config.guild_id:
             guild = discord.Object(id=self.config.guild_id)
             self.tree.copy_global_to(guild=guild)

@@ -208,7 +208,7 @@ simple que de deviner quel droit manque.
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-112 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
+126 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
 qui se télescopent une fois normalisés par Discord, limites de caractères des formulaires
 et des étiquettes), les tables de permissions, le pont GitHub avec ses pannes, et le
 découpage des textes trop longs.
