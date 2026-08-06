@@ -1,0 +1,11 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+
+# Local working notes, deliberately out of the repository: this repository is
+# public and CLAUDE.md records personal decisions and exchanges.
+CLAUDE.md
