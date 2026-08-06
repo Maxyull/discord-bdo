@@ -53,13 +53,29 @@ def check_blueprint() -> int:
             if key not in declared:
                 problems.append(f"{product.slug}.{attr} pointe vers {key!r}, absent du plan")
 
+    # A beta channel without the Tester role would be visible to nobody but
+    # staff, which looks like a permission bug rather than a missing role.
+    role_names = {spec.name for spec in bp.ROLES}
+    uses_beta = any(
+        setup_guild.effective_access(cat, ch)
+        in (bp.Access.BETA_ONLY, bp.Access.BETA_READ_ONLY)
+        for cat, ch in bp.all_channel_specs()
+    )
+    if uses_beta and bp.ROLE_TESTER not in role_names:
+        problems.append(f"des salons exigent le rôle {bp.ROLE_TESTER!r}, absent de ROLES")
+
     total = len(list(bp.all_channel_specs()))
     print(f"Plan : {len(bp.CATEGORIES)} catégories, {total} salons, {len(bp.ROLES)} rôles.")
+    print("Rôles, du haut vers le bas : " + " > ".join(r.name for r in bp.ROLES))
+    print()
     for cat in bp.CATEGORIES:
         print(f"  {cat.name}")
         for ch in cat.channels:
             marker = {"text": "#", "forum": "▤", "voice": "🔊"}[ch.kind.value]
-            print(f"    {marker} {ch.name}  [{ch.access.value}]")
+            # The effective access, not the declared one: a channel left at the
+            # PUBLIC default inside a private category is not public.
+            access = setup_guild.effective_access(cat, ch)
+            print(f"    {marker} {ch.name}  [{access.value}]")
 
     if problems:
         print("\nProblèmes :", file=sys.stderr)

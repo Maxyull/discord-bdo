@@ -5,8 +5,13 @@ services:
     restart: unless-stopped
     env_file: .env
     # No exposed port: the bot only makes outbound connections.
+    volumes:
+      - discord-bdo-data:/app/data
     logging:
       driver: json-file
       options:
         max-size: "10m"
         max-file: "3"
+
+volumes:
+  discord-bdo-data:

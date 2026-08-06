@@ -58,6 +58,8 @@ class Config:
     log_level: str
     #: When true the bot never writes to GitHub, it only logs what it would do.
     dry_run: bool
+    #: SQLite file holding the tester setup cards.
+    profiles_path: str = "data/profiles.db"
 
     @property
     def github_enabled(self) -> bool:
@@ -84,4 +86,5 @@ def load(env_file: Path | str | None = None, *, require_token: bool = True) -> C
         ),
         log_level=_get_str("LOG_LEVEL", default="INFO").upper(),
         dry_run=_get_str("DRY_RUN", default="0") in {"1", "true", "yes", "oui"},
+        profiles_path=_get_str("PROFILES_DB", default="data/profiles.db"),
     )

@@ -14,6 +14,7 @@ import discord
 from . import blueprint as bp
 from . import texts
 from .github_bridge import GitHubClient, GitHubError, IssueDraft, build_labels, truncate_title
+from .profiles import Profile, ProfileStore, normalise_resolution, normalise_scaling
 
 log = logging.getLogger("discord-bdo.views")
 
@@ -30,6 +31,10 @@ def bug_button_id(slug: str) -> str:
 
 def idea_button_id(slug: str) -> str:
     return f"{CUSTOM_ID_PREFIX}:idea:{slug}"
+
+
+SETUP_EDIT_ID = f"{CUSTOM_ID_PREFIX}:setup:edit"
+SETUP_SHOW_ID = f"{CUSTOM_ID_PREFIX}:setup:show"
 
 
 def clip(text: str, limit: int) -> str:
@@ -76,6 +81,35 @@ async def open_thread(
     raise TypeError(f"cannot open a thread in {type(channel).__name__}")
 
 
+def format_setup_block(profile: Profile | None) -> str:
+    """The setup lines as they appear inside a Discord bug thread."""
+    if profile is None or profile.is_empty:
+        return texts.SETUP_MISSING_IN_REPORT + "\n"
+    return texts.THREAD_BUG_SETUP.format(lines="\n".join(profile.as_lines()))
+
+
+def format_setup_rows(profile: Profile | None) -> str:
+    """The setup rows appended to the GitHub issue's table."""
+    if profile is None or profile.is_empty:
+        return ""
+    rows = [
+        ("Resolution", profile.resolution),
+        ("Scaling", profile.scaling),
+        ("Display mode", profile.display_mode),
+        ("Game language", profile.game_language),
+        ("Hardware", profile.hardware),
+    ]
+    return "".join(f"| {name} | {value} |\n" for name, value in rows if value)
+
+
+async def ask_for_screenshot(thread: discord.Thread) -> None:
+    """Post the screenshot instructions, swallowing any posting failure."""
+    try:
+        await thread.send(texts.SCREENSHOT_ASK)
+    except discord.HTTPException as exc:  # the report itself already landed
+        log.warning("could not ask for a screenshot in %s: %s", thread, exc)
+
+
 class ReportHandler:
     """Everything a modal needs to do its job, injected rather than imported.
 
@@ -91,15 +125,62 @@ class ReportHandler:
         default_labels: tuple[str, ...] = (),
         staff_log: discord.TextChannel | None = None,
         dry_run: bool = False,
+        profiles: ProfileStore | None = None,
     ) -> None:
         self.channels = channels
         self.github = github
         self.default_labels = default_labels
         self.staff_log = staff_log
         self.dry_run = dry_run
+        self.profiles = profiles
 
     def channel_for(self, key: str) -> discord.abc.GuildChannel | None:
         return self.channels.get(key)
+
+    async def profile_for(self, user_id: int) -> Profile | None:
+        """Never let a storage failure block a report: no card is survivable."""
+        if self.profiles is None:
+            return None
+        try:
+            return await self.profiles.get(user_id)
+        except Exception as exc:  # sqlite locked, file gone, disk full
+            log.warning("profile lookup failed for %s: %s", user_id, exc)
+            return None
+
+    async def save_profile(self, profile: Profile) -> bool:
+        """Persist a setup card. Returns whether it actually landed."""
+        if self.profiles is None:
+            log.warning("no profile store configured, setup card dropped")
+            return False
+        try:
+            await self.profiles.save(profile)
+        except Exception as exc:
+            log.warning("profile save failed for %s: %s", profile.user_id, exc)
+            return False
+        return True
+
+    async def publish_setup_card(self, profile: Profile) -> None:
+        """Mirror the card into the beta channel, replacing the member's old one.
+
+        Editing in place rather than appending keeps the channel usable as a
+        directory: one message per tester, always current.
+        """
+        channel = self.channels.get(bp.KEY_BETA_SETUPS)
+        if not isinstance(channel, discord.TextChannel):
+            return
+        embed = setup_embed(profile)
+        marker = f"<@{profile.user_id}>"
+        try:
+            async for message in channel.history(limit=200):
+                if (
+                    message.author.id == channel.guild.me.id
+                    and message.content == marker
+                ):
+                    await message.edit(content=marker, embed=embed)
+                    return
+            await channel.send(content=marker, embed=embed)
+        except discord.HTTPException as exc:
+            log.warning("could not publish the setup card: %s", exc)
 
     async def log_staff(self, message: str) -> None:
         if self.staff_log is None:
@@ -174,10 +255,12 @@ class BugModal(discord.ui.Modal):
 
         author = interaction.user
         system = self.system.value.strip() or "non précisé / not stated"
+        profile = await self.handler.profile_for(author.id)
         body = texts.THREAD_BUG_BODY.format(
             author=author.mention,
             version=self.version.value.strip(),
             system=system,
+            setup=format_setup_block(profile),
             steps=self.steps.value.strip(),
         )
 
@@ -187,6 +270,9 @@ class BugModal(discord.ui.Modal):
             body=body,
             tag_name=bp.BUG_TAGS[0],
         )
+        # A bug that reads the screen is half-reported without an image, so the
+        # ask goes in the thread rather than being buried in the form.
+        await ask_for_screenshot(thread)
 
         issue_url = await self.handler.create_issue(
             IssueDraft(
@@ -196,6 +282,7 @@ class BugModal(discord.ui.Modal):
                     author=author.display_name,
                     version=self.version.value.strip(),
                     system=system,
+                    setup_rows=format_setup_rows(profile),
                     summary=self.summary.value.strip(),
                     steps=self.steps.value.strip(),
                     thread_url=thread.jump_url,
@@ -343,6 +430,155 @@ class SupportPanel(discord.ui.View):
 
     async def _on_idea(self, interaction: discord.Interaction) -> None:
         await interaction.response.send_modal(IdeaModal(self.product, self.handler))
+
+
+# --------------------------------------------------------------------------- #
+# Beta: the hardware setup card
+# --------------------------------------------------------------------------- #
+
+
+class SetupModal(discord.ui.Modal):
+    """Five fields, which is exactly Discord's per-modal limit.
+
+    Pre-filled from the stored card when there is one, so updating a single
+    value does not mean retyping the other four.
+    """
+
+    def __init__(self, handler: ReportHandler, existing: Profile | None = None) -> None:
+        super().__init__(title=texts.MODAL_SETUP_TITLE)
+        self.handler = handler
+
+        def previous(attr: str) -> str:
+            return getattr(existing, attr, "") if existing else ""
+
+        self.resolution = discord.ui.TextInput(
+            label=texts.FIELD_RESOLUTION_LABEL,
+            placeholder=texts.FIELD_RESOLUTION_PLACEHOLDER,
+            default=previous("resolution") or None,
+            max_length=40,
+        )
+        self.scaling = discord.ui.TextInput(
+            label=texts.FIELD_SCALING_LABEL,
+            placeholder=texts.FIELD_SCALING_PLACEHOLDER,
+            default=previous("scaling") or None,
+            max_length=20,
+        )
+        self.display_mode = discord.ui.TextInput(
+            label=texts.FIELD_DISPLAY_MODE_LABEL,
+            placeholder=texts.FIELD_DISPLAY_MODE_PLACEHOLDER,
+            default=previous("display_mode") or None,
+            max_length=60,
+        )
+        self.game_language = discord.ui.TextInput(
+            label=texts.FIELD_GAME_LANGUAGE_LABEL,
+            placeholder=texts.FIELD_GAME_LANGUAGE_PLACEHOLDER,
+            default=previous("game_language") or None,
+            max_length=30,
+            required=False,
+        )
+        self.hardware = discord.ui.TextInput(
+            label=texts.FIELD_HARDWARE_LABEL,
+            placeholder=texts.FIELD_HARDWARE_PLACEHOLDER,
+            default=previous("hardware") or None,
+            style=discord.TextStyle.paragraph,
+            max_length=300,
+            required=False,
+        )
+        for item in (
+            self.resolution,
+            self.scaling,
+            self.display_mode,
+            self.game_language,
+            self.hardware,
+        ):
+            self.add_item(item)
+
+    def to_profile(self, user: discord.abc.User) -> Profile:
+        return Profile(
+            user_id=user.id,
+            display_name=getattr(user, "display_name", str(user)),
+            resolution=normalise_resolution(self.resolution.value),
+            scaling=normalise_scaling(self.scaling.value),
+            display_mode=self.display_mode.value.strip(),
+            game_language=self.game_language.value.strip(),
+            hardware=" ".join(self.hardware.value.split()),
+        )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        profile = self.to_profile(interaction.user)
+
+        saved = await self.handler.save_profile(profile)
+        if not saved:
+            await interaction.followup.send(texts.ERR_GENERIC, ephemeral=True)
+            return
+
+        await interaction.followup.send(texts.SETUP_SAVED, ephemeral=True)
+        await self.handler.publish_setup_card(profile)
+
+    async def on_error(
+        self, interaction: discord.Interaction, error: Exception
+    ) -> None:  # pragma: no cover - defensive
+        log.exception("setup modal failed", exc_info=error)
+        await _report_error(interaction)
+
+
+class SetupPanel(discord.ui.View):
+    def __init__(self, handler: ReportHandler) -> None:
+        super().__init__(timeout=None)
+        self.handler = handler
+
+        edit = discord.ui.Button(
+            label=texts.BTN_SETUP,
+            style=discord.ButtonStyle.primary,
+            custom_id=SETUP_EDIT_ID,
+        )
+        edit.callback = self._on_edit
+        self.add_item(edit)
+
+        show = discord.ui.Button(
+            label=texts.BTN_SETUP_SHOW,
+            style=discord.ButtonStyle.secondary,
+            custom_id=SETUP_SHOW_ID,
+        )
+        show.callback = self._on_show
+        self.add_item(show)
+
+    async def _on_edit(self, interaction: discord.Interaction) -> None:
+        existing = await self.handler.profile_for(interaction.user.id)
+        await interaction.response.send_modal(SetupModal(self.handler, existing))
+
+    async def _on_show(self, interaction: discord.Interaction) -> None:
+        profile = await self.handler.profile_for(interaction.user.id)
+        if profile is None or profile.is_empty:
+            channel = self.handler.channel_for(bp.KEY_BETA_SETUPS)
+            where = channel.mention if channel else "#beta-configs"
+            await interaction.response.send_message(
+                texts.SETUP_EMPTY.format(channel=where), ephemeral=True
+            )
+            return
+        await interaction.response.send_message(
+            embed=setup_embed(profile), ephemeral=True
+        )
+
+
+def setup_embed(profile: Profile) -> discord.Embed:
+    return discord.Embed(
+        description=texts.SETUP_CARD.format(
+            author=profile.display_name or f"<@{profile.user_id}>",
+            lines="\n".join(profile.as_lines()),
+            updated=profile.updated_at or "—",
+        ),
+        colour=discord.Colour(0x6BBF59),
+    )
+
+
+def setup_panel_embed() -> discord.Embed:
+    return discord.Embed(
+        title=texts.SETUP_PANEL_TITLE,
+        description=texts.SETUP_PANEL_BODY,
+        colour=discord.Colour(0x6BBF59),
+    )
 
 
 def panel_embed(product: bp.ProductSpec) -> discord.Embed:

@@ -13,13 +13,20 @@ def make_role(name, rid):
 
 
 EVERYONE = make_role("@everyone", 1)
-STAFF = make_role(bp.ROLE_STAFF, 2)
-MODERATOR = make_role(bp.ROLE_MODERATOR, 3)
+STAFF = make_role(bp.ROLE_DEV, 2)
+MODERATOR = make_role(bp.ROLE_MOD, 3)
 MUTED = make_role(bp.ROLE_MUTED, 4)
+TESTER = make_role(bp.ROLE_TESTER, 5)
 
 
 def build(access, **kwargs):
-    params = dict(everyone=EVERYONE, staff=STAFF, moderator=MODERATOR, muted=MUTED)
+    params = dict(
+        everyone=EVERYONE,
+        staff=STAFF,
+        moderator=MODERATOR,
+        muted=MUTED,
+        tester=TESTER,
+    )
     params.update(kwargs)
     return setup_guild.overwrites_for(access, **params)
 
@@ -81,8 +88,63 @@ class TestOverwrites:
         assert bot not in build(bp.Access.PUBLIC, bot_member=bot)
 
     def test_missing_optional_roles_are_simply_absent(self):
-        table = build(bp.Access.READ_ONLY, staff=None, moderator=None, muted=None)
+        table = build(
+            bp.Access.READ_ONLY, staff=None, moderator=None, muted=None, tester=None
+        )
         assert set(table) == {EVERYONE}
+
+
+class TestBetaOverwrites:
+    def test_beta_channels_are_hidden_from_everyone(self):
+        for access in (bp.Access.BETA_ONLY, bp.Access.BETA_READ_ONLY):
+            assert build(access)[EVERYONE].view_channel is False
+
+    def test_testers_see_and_write_in_a_beta_channel(self):
+        table = build(bp.Access.BETA_ONLY)
+        assert table[TESTER].view_channel is True
+        assert table[TESTER].send_messages is True
+
+    def test_read_only_beta_lets_testers_read_but_not_post(self):
+        table = build(bp.Access.BETA_READ_ONLY)
+        assert table[TESTER].view_channel is True
+        assert table[TESTER].send_messages is False
+
+    def test_read_only_beta_still_allows_thread_replies(self):
+        # The channel stays a clean noticeboard while discussion continues
+        # inside threads, which is the whole point of the split.
+        assert build(bp.Access.BETA_READ_ONLY)[TESTER].send_messages_in_threads is True
+
+    def test_staff_keeps_access_to_beta(self):
+        table = build(bp.Access.BETA_ONLY)
+        assert table[STAFF].view_channel is True
+        assert table[MODERATOR].view_channel is True
+
+    def test_without_a_tester_role_nobody_is_granted_access(self):
+        table = build(bp.Access.BETA_ONLY, tester=None)
+        assert table[EVERYONE].view_channel is False
+        assert TESTER not in table
+
+
+class TestEffectiveAccess:
+    def test_public_channel_inherits_a_beta_category(self):
+        category = bp.CategorySpec(name="c", channels=(), access=bp.Access.BETA_ONLY)
+        channel = bp.ChannelSpec(name="x")
+        assert setup_guild.effective_access(category, channel) is bp.Access.BETA_ONLY
+
+    def test_public_channel_inherits_a_staff_category(self):
+        category = bp.CategorySpec(name="c", channels=(), access=bp.Access.STAFF_ONLY)
+        channel = bp.ChannelSpec(name="x")
+        assert setup_guild.effective_access(category, channel) is bp.Access.STAFF_ONLY
+
+    def test_an_explicit_channel_access_wins(self):
+        category = bp.CategorySpec(name="c", channels=(), access=bp.Access.BETA_ONLY)
+        channel = bp.ChannelSpec(name="x", access=bp.Access.BETA_READ_ONLY)
+        assert setup_guild.effective_access(category, channel) is bp.Access.BETA_READ_ONLY
+
+    def test_a_public_category_does_not_restrict_anything(self):
+        category = bp.CategorySpec(name="c", channels=(), access=bp.Access.PUBLIC)
+        channel = bp.ChannelSpec(name="x")
+        assert setup_guild.effective_access(category, channel) is bp.Access.PUBLIC
 
     def test_unknown_access_level_raises(self):
         with pytest.raises(ValueError):
@@ -136,6 +198,19 @@ class TestRegressions:
         for _, spec in bp.all_channel_specs():
             once = setup_guild.normalise(spec.name)
             assert setup_guild.normalise(once) == once
+
+    def test_no_beta_channel_is_ever_visible_to_everyone(self):
+        """The whole point of the category; one wrong access leaks test builds."""
+        beta = next(c for c in bp.CATEGORIES if c.access is bp.Access.BETA_ONLY)
+        for spec in beta.channels:
+            access = setup_guild.effective_access(beta, spec)
+            assert build(access)[EVERYONE].view_channel is False, spec.name
+
+    def test_role_order_puts_dev_on_top_and_muted_at_the_bottom(self):
+        names = [r.name for r in bp.ROLES]
+        assert names[0] == bp.ROLE_DEV
+        assert names[-1] == bp.ROLE_MUTED
+        assert names.index(bp.ROLE_MOD) < names.index(bp.ROLE_TESTER)
 
     def test_every_forum_declares_tags(self):
         # An untagged bug forum makes triage impossible, and views.py assumes

@@ -83,7 +83,7 @@ def test_requires_community_is_true_because_forums_exist():
 
 def test_staff_role_is_the_only_administrator():
     admins = [r.name for r in bp.ROLES if "administrator" in r.permissions]
-    assert admins == [bp.ROLE_STAFF]
+    assert admins == [bp.ROLE_DEV]
 
 
 def test_muted_role_has_no_permissions():
