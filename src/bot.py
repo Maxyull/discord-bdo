@@ -9,12 +9,15 @@ Two jobs:
 from __future__ import annotations
 
 import logging
+import time
 
 import discord
 from discord import app_commands
+from discord.ext import tasks
 
 from . import blueprint as bp
 from . import setup_guild
+from . import status as status_probes
 from . import texts
 from .config import Config
 from .github_bridge import GitHubClient
@@ -33,6 +36,13 @@ log = logging.getLogger("discord-bdo.bot")
 #: Attachment types counted as a usable screenshot.
 IMAGE_TYPES = ("image/",)
 VIDEO_TYPES = ("video/",)
+
+#: How often the status board is refreshed. Short enough that an outage shows
+#: up before people start asking, long enough to stay far from any rate limit.
+STATUS_INTERVAL_MINUTES = 5
+#: Even with nothing changing, rewrite the board this often so the "checked"
+#: stamp proves the monitoring is still alive.
+STATUS_MAX_SILENCE_SECONDS = 30 * 60
 
 
 class BdoBot(discord.Client):
@@ -53,6 +63,11 @@ class BdoBot(discord.Client):
         self.profiles = ProfileStore(config.profiles_path)
         #: Filled on ready, per guild id.
         self.channels_by_guild: dict[int, dict[str, discord.abc.GuildChannel]] = {}
+        #: Last published status snapshot, so the board is only rewritten when
+        #: something actually changed.
+        self._status_fingerprint: str = ""
+        self._status_written_at: float = 0.0
+        self._status_states: dict[str, status_probes.State] = {}
 
         # Registered here rather than in setup_hook so the command list can be
         # inspected without connecting to Discord.
@@ -81,6 +96,8 @@ class BdoBot(discord.Client):
                 # previous run keep working after a restart.
                 self.add_view(SupportPanel(product, handler))
             self.add_view(SetupPanel(handler))
+        if not self.status_loop.is_running():
+            self.status_loop.start()
         await self.change_presence(
             activity=discord.Game(name="Butin & Rubin · /aide")
         )
@@ -192,6 +209,68 @@ class BdoBot(discord.Client):
             )
         )
 
+    # -- status board -------------------------------------------------------- #
+
+    @tasks.loop(minutes=STATUS_INTERVAL_MINUTES)
+    async def status_loop(self) -> None:
+        try:
+            await self.refresh_status()
+        except Exception:  # a monitoring failure must never kill the bot
+            log.exception("status refresh failed")
+
+    @status_loop.before_loop
+    async def _before_status(self) -> None:
+        await self.wait_until_ready()
+
+    async def refresh_status(self, force: bool = False) -> list:
+        results = await status_probes.check_all(github_token=self.config.github_token)
+        await self.announce_status_changes(results)
+
+        fingerprint = status_probes.fingerprint(results)
+        stale = (
+            time.time() - self._status_written_at > STATUS_MAX_SILENCE_SECONDS
+        )
+        if not force and fingerprint == self._status_fingerprint and not stale:
+            return results
+
+        for guild in self.guilds:
+            channels = self.channels_by_guild.get(guild.id) or self.index_channels(guild)
+            channel = channels.get(bp.KEY_STATUS)
+            if not isinstance(channel, discord.TextChannel):
+                continue
+            try:
+                await setup_guild._replace_bot_message(channel, status_embed(results))
+            except discord.HTTPException as exc:
+                log.warning("could not publish the status board: %s", exc)
+
+        self._status_fingerprint = fingerprint
+        self._status_written_at = time.time()
+        return results
+
+    async def announce_status_changes(self, results) -> None:
+        """Tell the staff when a service flips, once per transition."""
+        changed = []
+        for result in results:
+            before = self._status_states.get(result.probe.key)
+            if before is not None and before is not result.state:
+                changed.append((result, before))
+            self._status_states[result.probe.key] = result.state
+
+        if not changed:
+            return
+        for guild in self.guilds:
+            handler = self.build_handler(guild)
+            for result, before in changed:
+                await handler.log_staff(
+                    texts.LOG_STATUS_CHANGE.format(
+                        dot=result.state.dot,
+                        label=result.probe.label,
+                        before=before.value,
+                        after=result.state.value,
+                        note=f" ({result.note})" if result.note else "",
+                    )
+                )
+
     async def post_panels(
         self,
         guild: discord.Guild,
@@ -235,6 +314,17 @@ class BdoBot(discord.Client):
                 channel, setup_panel_embed(), view=setup_view
             )
             report.updated_channels.append(channel.name)
+
+
+def status_embed(results) -> discord.Embed:
+    state = status_probes.overall(results)
+    return discord.Embed(
+        title=texts.STATUS_TITLE.format(
+            dot=state.dot, headline=status_probes.HEADLINES[state]
+        ),
+        description=status_probes.render_description(results, int(time.time())),
+        colour=discord.Colour(status_probes.COLOURS[state]),
+    )
 
 
 def _is_staff(interaction: discord.Interaction) -> bool:
@@ -287,6 +377,15 @@ def register_commands(bot: BdoBot) -> None:
             )
             return
         await interaction.followup.send(f"```\n{report.summary()[:1900]}\n```", ephemeral=True)
+
+    @bot.tree.command(
+        name="etat",
+        description="État des services en direct / Live service status",
+    )
+    async def status_command(interaction: discord.Interaction) -> None:
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        results = await status_probes.check_all(github_token=bot.config.github_token)
+        await interaction.followup.send(embed=status_embed(results), ephemeral=True)
 
     @bot.tree.command(
         name="config",

@@ -23,7 +23,7 @@ Quatre choses vivent ici :
 ## Ce que le script construit
 
 ```
-📢 Infos            bienvenue-welcome · règles-rules · annonces-announcements · guides-tutoriels (forum)
+📢 Infos            bienvenue-welcome · règles-rules · annonces-announcements · état-status · guides-tutoriels (forum)
 💬 Communauté       chat-fr · chat-en · captures-screenshots · Vocal
 🪙 Butin            butin-aide-help · butin-bugs (forum) · butin-suggestions (forum) · butin-versions-releases
 ⏱️ Rubin            rubin-aide-help · rubin-bugs (forum) · rubin-suggestions (forum) · rubin-versions-releases
@@ -52,6 +52,52 @@ au bon endroit.
 Les salons de bugs et de suggestions sont des **forums**, avec des étiquettes de suivi
 (`Nouveau`, `Confirmé`, `Corrigé`, `Rejeté`). Un sujet = un fil, donc rien ne se perd
 dans le défilement.
+
+### Le tableau d'état
+
+`#état-status` est un salon verrouillé où le bot tient à jour **un seul message**, vert,
+jaune ou rouge par service. Il est vérifié tout seul **toutes les 5 minutes**.
+
+| Sonde | Ce qui est vérifié | Ce que le rouge veut dire |
+| --- | --- | --- |
+| **API Rubin** | `rubin.maxyull.fr/sante` répond `etat: ok` | Rubin ne peut plus envoyer ses temps |
+| **Téléchargement Butin** | la dernière version est servie par GitHub | personne ne peut installer Butin |
+| **Téléchargement Rubin** | idem | personne ne peut installer Rubin |
+| **BDOCodex** | le référentiel des noms d'objets et de quêtes | les noms ne se mettent plus à jour |
+| **Veliainn** | la source des prix de Butin | les prix peuvent dater |
+| **maxyull.fr** | le site | — |
+
+Les six sondes partent **en parallèle**, l'ensemble prend moins d'une seconde. Une sonde
+lente ne retarde pas les autres.
+
+Le jaune n'est pas un rouge poli, il a un sens précis : le service **a répondu**, mais
+lentement, avec un code inattendu, ou en se déclarant lui-même en mauvais état. C'est le
+cas de l'API Rubin, dont la sonde lit le corps de la réponse et pas seulement le code :
+un service qui renvoie `200` en annonçant `etat: degraded` est jaune, pas vert.
+
+Quand quelque chose ne va pas, le message **dit ce qui casse pour l'utilisateur**, pas
+seulement quel serveur est tombé :
+
+```
+🔴 API Rubin — pas de réponse / timeout
+🟡 Référentiel BDOCodex  4200 ms — lent / slow
+
+> Rubin ne peut plus envoyer ses temps / Rubin cannot sync your runs
+> Les noms d'objets et de quêtes ne se mettent plus à jour
+```
+
+**Le message n'est réécrit que si un état change.** L'horodatage est un `<t:…:R>`, que
+Discord transforme en « il y a 3 minutes » côté lecteur et met à jour tout seul : un
+tableau tout vert n'a donc besoin d'aucune écriture. Une réécriture de sécurité a lieu au
+maximum toutes les 30 minutes, pour prouver que la surveillance tourne encore.
+
+Chaque bascule d'un service part dans `#staff-journal`, une ligne par transition. Vous
+voyez donc l'historique sans polluer le salon public.
+
+`/etat` relance les sondes à la demande et répond en privé.
+
+Une panne de la surveillance ne peut pas emporter le bot : la boucle attrape tout, et une
+sonde en échec est un résultat rouge, pas une exception.
 
 ### Les guides
 
@@ -196,6 +242,7 @@ Discord affiche « L'interaction a échoué » au clic. Les fils déjà créés,
 | Commande | Qui | Effet |
 | --- | --- | --- |
 | `/setup` | Staff | Reconstruit ou répare le serveur, sans rien supprimer |
+| `/etat` | Tout le monde | Relance les sondes et affiche l'état en direct |
 | `/config` | Tout le monde | Affiche sa fiche de configuration |
 | `/config @membre` | Staff | Affiche la fiche de quelqu'un d'autre |
 | `/aide` | Tout le monde | Rappelle où sont les boutons de rapport |
@@ -336,7 +383,7 @@ consultation croisée est réservée au staff, et une fiche se supprime sur dema
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-236 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
+275 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
 qui se télescopent une fois normalisés par Discord, limites de caractères des formulaires
 et des étiquettes), les tables de permissions y compris l'étanchéité de la catégorie
 bêta, le stockage des fiches, la normalisation des résolutions et des échelles, la
