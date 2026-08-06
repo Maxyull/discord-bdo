@@ -461,17 +461,14 @@ def register_commands(bot: BdoBot) -> None:
 
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        # Say what is missing before building half a server.
-        problems = setup_guild.preflight(interaction.guild)
-        if problems:
+        try:
+            report = await setup_guild.run(interaction.guild, post_panels=bot.post_panels)
+        except setup_guild.PermissionsMissing as missing:
             await interaction.followup.send(
-                texts.PREFLIGHT_BLOCKED.format(problems="\n".join(problems)),
+                texts.PREFLIGHT_BLOCKED.format(problems="\n".join(missing.problems)),
                 ephemeral=True,
             )
             return
-
-        try:
-            report = await setup_guild.run(interaction.guild, post_panels=bot.post_panels)
         except discord.Forbidden:
             await interaction.followup.send(
                 "❌ Il me manque des droits. Donnez au bot un rôle Administrateur, "
