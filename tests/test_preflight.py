@@ -105,3 +105,48 @@ class TestRequiredPermissions:
     def test_channel_and_role_management_are_required(self):
         names = {name for name, _ in setup_guild.REQUIRED_PERMISSIONS}
         assert {"manage_channels", "manage_roles"} <= names
+
+
+class FakeRoleWithId(FakeRole):
+    def __init__(self, name, position, rid):
+        super().__init__(name, position)
+        self.id = rid
+
+
+class TestEffectiveRoleOrder:
+    """Found in production: the bot could manage all five roles, `/tester`
+    worked, and the report still said "remontez le rôle du bot". Discord ranks
+    equal positions among themselves, so absolute positions are the wrong
+    question; the displayed order is the one that counts.
+    """
+
+    def build(self, noms_dans_l_ordre_affiche):
+        # guild.roles is lowest-first, so the displayed top comes last.
+        roles = [
+            FakeRoleWithId(nom, 1, index)
+            for index, nom in enumerate(reversed(noms_dans_l_ordre_affiche))
+        ]
+        guild = FakeGuild(FakeMember(FakePermissions(administrator=True), 1))
+        guild.roles = roles
+        return guild, {r.name: r for r in roles}
+
+    def test_an_already_correct_order_is_recognised(self):
+        noms = [spec.name for spec in bp.ROLES]
+        guild, par_nom = self.build(noms)
+        ordered = [par_nom[n] for n in noms]
+        assert setup_guild.effective_order_is_correct(guild, ordered) is True
+
+    def test_a_swapped_pair_is_detected(self):
+        noms = [spec.name for spec in bp.ROLES]
+        inverse = [noms[1], noms[0]] + noms[2:]
+        guild, par_nom = self.build(inverse)
+        ordered = [par_nom[n] for n in noms]
+        assert setup_guild.effective_order_is_correct(guild, ordered) is False
+
+    def test_unrelated_roles_do_not_disturb_the_comparison(self):
+        # A Nitro Booster role sitting between two of ours is not a mistake.
+        noms = [spec.name for spec in bp.ROLES]
+        avec_intrus = [noms[0], "Nitro Booster"] + noms[1:]
+        guild, par_nom = self.build(avec_intrus)
+        ordered = [par_nom[n] for n in noms]
+        assert setup_guild.effective_order_is_correct(guild, ordered) is True
