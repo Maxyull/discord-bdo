@@ -138,6 +138,7 @@ KEY_ANNOUNCEMENTS = "announcements"
 KEY_RULES = "rules"
 KEY_WELCOME = "welcome"
 KEY_GUIDES = "guides"
+KEY_STATUS = "status"
 KEY_BUTIN_HELP = "butin_help"
 KEY_BUTIN_BUGS = "butin_bugs"
 KEY_BUTIN_IDEAS = "butin_ideas"
@@ -195,6 +196,16 @@ CATEGORIES: tuple[CategorySpec, ...] = (
                 key=KEY_ANNOUNCEMENTS,
                 access=Access.READ_ONLY,
                 topic="Nouveautés des deux logiciels / News about both tools",
+            ),
+            ChannelSpec(
+                name="état-status",
+                key=KEY_STATUS,
+                access=Access.READ_ONLY,
+                topic=(
+                    "Vert, jaune ou rouge : l'état des services dont les deux "
+                    "logiciels dépendent, vérifié automatiquement. / Green, amber "
+                    "or red: the services both tools rely on, checked automatically."
+                ),
             ),
             ChannelSpec(
                 name="guides-tutoriels",

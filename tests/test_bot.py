@@ -27,7 +27,13 @@ def bot():
 class TestConstruction:
     def test_commands_are_registered_at_construction(self, bot):
         names = {cmd.name for cmd in bot.tree.get_commands()}
-        assert names == {"setup", "aide", "config"}
+        assert names == {"setup", "aide", "config", "etat"}
+
+    def test_the_status_loop_is_declared_but_not_started_yet(self, bot):
+        # It starts in on_ready; starting it in __init__ would need a running
+        # event loop and would break every offline test.
+        assert bot.status_loop.is_running() is False
+        assert bot.status_loop.minutes == 5
 
     def test_setup_command_is_admin_only(self, bot):
         setup = next(c for c in bot.tree.get_commands() if c.name == "setup")
