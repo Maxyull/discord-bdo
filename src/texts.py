@@ -17,7 +17,7 @@ Ce serveur est celui de deux outils gratuits pour Black Desert Online, sur PC :
 
 Ici on parle des deux, on remonte les bugs, on propose des idées, et on partage ses sessions.
 **Avant de poser une question, passez par les guides** : installation, calibrage et dépannage y sont, un fil par sujet, filtrable par logiciel.
-Les salons **français et anglais** sont ouverts à tout le monde, écrivez dans la langue qui vous arrange.
+**Écrivez dans la langue qui vous arrange**, français ou anglais : le salon de discussion est commun.
 
 **🇬🇧 English**
 This is the server of two free tools for Black Desert Online, on PC:
@@ -26,7 +26,7 @@ This is the server of two free tools for Black Desert Online, on PC:
 > ⏱️ **Rubin** — the quest timer. It reads the quest banner and times your runs. French first, English later.
 
 Bug reports and ideas are welcome. **Check the guides first**: install, calibration and troubleshooting live there, one thread per topic, filterable by tool.
-**French and English channels are open to everyone**, use whichever suits you.
+**Write in whichever language suits you**, French or English: there is one shared chat channel, not one per language.
 """
 
 RULES_TITLE = "Règlement / Rules"
@@ -37,14 +37,14 @@ RULES_BODY = """\
 2. Pas de publicité ni de démarchage en message privé.
 3. Rien d'illégal, et rien qui enfreint les conditions d'utilisation de Black Desert : pas d'automatisation d'entrées clavier ou souris, pas de bot de jeu, pas de vente de compte.
 4. Un sujet par fil dans les salons de bugs et d'idées. Cherchez avant de créer un doublon.
-5. Le français et l'anglais sont acceptés partout.
+5. Le français et l'anglais sont acceptés partout, y compris dans le salon de discussion.
 
 **🇬🇧**
 1. Be civil. No insults, harassment or hate speech.
 2. No advertising, no DM soliciting.
 3. Nothing illegal, and nothing against the Black Desert terms of service: no input automation, no game bot, no account trading.
 4. One topic per thread in the bug and idea channels. Search before opening a duplicate.
-5. French and English are welcome everywhere.
+5. French and English are welcome everywhere, the chat channel included.
 
 *Les deux outils lisent l'écran, ils ne touchent jamais au jeu ni à sa mémoire. / Both tools read the screen only, they never touch the game or its memory.*
 """

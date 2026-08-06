@@ -225,21 +225,20 @@ CATEGORIES: tuple[CategorySpec, ...] = (
     CategorySpec(
         name="💬 Communauté",
         channels=(
+            # One chat, not one per language: with a handful of members two
+            # rooms make the server look twice as empty. The topic says both
+            # languages are welcome so the name does not turn anglophones away.
             ChannelSpec(
                 name="chat-fr",
-                topic="Discussion générale en français. Black Desert, les outils, le reste.",
-            ),
-            ChannelSpec(
-                name="chat-en",
-                topic="General chat in English. Black Desert, the tools, anything else.",
+                topic=(
+                    "Discussion générale. Black Desert, les outils, le reste. "
+                    "L'anglais est le bienvenu ici aussi. / General chat, "
+                    "English welcome too."
+                ),
             ),
             ChannelSpec(
                 name="captures-screenshots",
                 topic="Vos drops, vos sessions, vos records / Your drops, sessions and records",
-            ),
-            ChannelSpec(
-                name="Vocal / Voice",
-                kind=ChannelKind.VOICE,
             ),
         ),
     ),
@@ -337,8 +336,6 @@ CATEGORIES: tuple[CategorySpec, ...] = (
         name="🔒 Staff",
         access=Access.STAFF_ONLY,
         channels=(
-            ChannelSpec(
-                name="staff-chat", access=Access.STAFF_ONLY),
             ChannelSpec(
                 name="staff-configs",
                 key=KEY_STAFF_SETUPS,

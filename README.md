@@ -24,11 +24,11 @@ Quatre choses vivent ici :
 
 ```
 📢 Infos            bienvenue-welcome · règles-rules · annonces-announcements · état-status · guides-tutoriels (forum)
-💬 Communauté       chat-fr · chat-en · captures-screenshots · Vocal
+💬 Communauté       chat-fr · captures-screenshots
 🪙 Butin            butin-aide-help · butin-bugs (forum) · butin-suggestions (forum) · butin-versions-releases
 ⏱️ Rubin            rubin-aide-help · rubin-bugs (forum) · rubin-suggestions (forum) · rubin-versions-releases
 🧪 Bêta   (privé)   beta-annonces-news · beta-chat · beta-retours-feedback (forum)
-🔒 Staff  (privé)   staff-chat · staff-configs · staff-journal
+🔒 Staff  (privé)   staff-configs · staff-journal
 ```
 
 Rôles créés, du haut vers le bas : `Dev`, `Mod`, `Tester`, `Joueur`, `Muted`.
@@ -45,9 +45,12 @@ L'ordre compte : Discord décide qui peut modérer qui par la position dans la l
 par le nom de la permission. Le script impose donc l'ordre après création. Un `Mod` placé
 sous `Joueur` ne peut mettre personne en timeout.
 
-Les salons **FR et EN sont visibles par tout le monde**, sans rôle à choisir : personne
-n'est bloqué derrière un bouton de langue, et un anglophone voit tout de suite qu'il est
-au bon endroit.
+**Un seul salon de discussion**, pas un par langue : à deux membres, deux salons font
+paraître le serveur deux fois plus vide. Le français et l'anglais y sont acceptés, et le
+sujet du salon le dit, pour que son nom ne dissuade pas un anglophone.
+
+Ni vocal, ni salon d'équipe : ils n'auraient servi à personne. Ils se rajoutent en une
+ligne dans `src/blueprint.py` le jour où le serveur les mérite.
 
 Les salons de bugs et de suggestions sont des **forums**, avec des étiquettes de suivi
 (`Nouveau`, `Confirmé`, `Corrigé`, `Rejeté`). Un sujet = un fil, donc rien ne se perd
@@ -406,7 +409,7 @@ consultation croisée est réservée au staff, et une fiche se supprime sur dema
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-308 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
+310 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
 qui se télescopent une fois normalisés par Discord, limites de caractères des formulaires
 et des étiquettes), les tables de permissions y compris l'étanchéité de la catégorie
 bêta, le stockage des fiches, la normalisation des résolutions et des échelles, la
