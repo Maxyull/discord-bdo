@@ -55,6 +55,20 @@ def test_release_channels_are_read_only():
         assert by_key[product.release_channel_key].access is bp.Access.READ_ONLY
 
 
+def test_there_is_a_single_chat_channel():
+    # Decided 06/08: one shared room rather than one per language. Two rooms
+    # make a small server look twice as empty.
+    chats = [ch for _, ch in bp.all_channel_specs() if ch.name.startswith("chat")]
+    assert len(chats) == 1
+
+
+def test_the_chat_topic_says_english_is_welcome():
+    # The channel is named chat-fr, so without this an anglophone reads the
+    # name as "not for me".
+    chat = next(ch for _, ch in bp.all_channel_specs() if ch.name.startswith("chat"))
+    assert "nglais" in chat.topic or "nglish" in chat.topic
+
+
 def test_staff_category_is_staff_only():
     staff = next(c for c in bp.CATEGORIES if "Staff" in c.name)
     assert staff.access is bp.Access.STAFF_ONLY
