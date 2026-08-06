@@ -45,6 +45,10 @@ def overwrites_for(
             view_channel=True,
             send_messages=False,
             create_public_threads=False,
+            # Replying inside an existing thread stays open: it is what makes
+            # the guide forum useful (a question under the guide it is about)
+            # without letting anyone open a channel-level topic.
+            send_messages_in_threads=True,
             add_reactions=True,
         )
     elif access in (bp.Access.BETA_ONLY, bp.Access.BETA_READ_ONLY):

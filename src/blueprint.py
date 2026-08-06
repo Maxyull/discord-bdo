@@ -137,6 +137,7 @@ class CategorySpec:
 KEY_ANNOUNCEMENTS = "announcements"
 KEY_RULES = "rules"
 KEY_WELCOME = "welcome"
+KEY_GUIDES = "guides"
 KEY_BUTIN_HELP = "butin_help"
 KEY_BUTIN_BUGS = "butin_bugs"
 KEY_BUTIN_IDEAS = "butin_ideas"
@@ -155,6 +156,18 @@ KEY_STAFF_LOG = "staff_log"
 BUG_TAGS = ("Nouveau / New", "Confirmé / Confirmed", "Corrigé / Fixed", "Rejeté / Declined")
 IDEA_TAGS = ("Nouveau / New", "Retenu / Planned", "Fait / Shipped", "Rejeté / Declined")
 BETA_TAGS = ("Nouveau / New", "Lu / Seen", "Traité / Handled")
+
+#: One shared guide forum for both tools, so the tags carry the sorting rather
+#: than two half-empty channels. Product tags come first: they are the filter
+#: people reach for.
+GUIDE_TAGS = (
+    "🪙 Butin",
+    "⏱️ Rubin",
+    "Installation",
+    "Calibrage / Setup",
+    "Astuce / Tip",
+    "Dépannage",
+)
 
 #: Applied to a bug thread once a screenshot lands in it. Kept out of BUG_TAGS
 #: on purpose: it is a state the bot sets, not one a reporter picks.
@@ -182,6 +195,19 @@ CATEGORIES: tuple[CategorySpec, ...] = (
                 key=KEY_ANNOUNCEMENTS,
                 access=Access.READ_ONLY,
                 topic="Nouveautés des deux logiciels / News about both tools",
+            ),
+            ChannelSpec(
+                name="guides-tutoriels",
+                kind=ChannelKind.FORUM,
+                key=KEY_GUIDES,
+                access=Access.READ_ONLY,
+                tags=GUIDE_TAGS,
+                topic=(
+                    "Un fil par guide, pour les deux logiciels. Filtrez par étiquette. "
+                    "Seule l'équipe ouvre un fil, tout le monde peut y poser une "
+                    "question. / One thread per guide, for both tools. Filter by tag; "
+                    "the team opens threads, anyone can ask inside one."
+                ),
             ),
         ),
     ),

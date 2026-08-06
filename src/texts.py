@@ -16,6 +16,7 @@ Ce serveur est celui de deux outils gratuits pour Black Desert Online, sur PC :
 > ⏱️ **Rubin** — le chronomètre de quêtes. Il lit le bandeau de quête et mesure le temps que vous mettez.
 
 Ici on parle des deux, on remonte les bugs, on propose des idées, et on partage ses sessions.
+**Avant de poser une question, passez par les guides** : installation, calibrage et dépannage y sont, un fil par sujet, filtrable par logiciel.
 Les salons **français et anglais** sont ouverts à tout le monde, écrivez dans la langue qui vous arrange.
 
 **🇬🇧 English**
@@ -24,7 +25,8 @@ This is the server of two free tools for Black Desert Online, on PC:
 > 🪙 **Butin** — the loot tracker. It reads the game log and counts your drops live, with prices and post-tax value. Its interface is in French.
 > ⏱️ **Rubin** — the quest timer. It reads the quest banner and times your runs. French first, English later.
 
-Bug reports and ideas are welcome. **French and English channels are open to everyone**, use whichever suits you.
+Bug reports and ideas are welcome. **Check the guides first**: install, calibration and troubleshooting live there, one thread per topic, filterable by tool.
+**French and English channels are open to everyone**, use whichever suits you.
 """
 
 RULES_TITLE = "Règlement / Rules"

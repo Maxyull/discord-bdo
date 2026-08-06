@@ -62,6 +62,13 @@ class TestOverwrites:
         assert table[EVERYONE].send_messages is False
         assert table[EVERYONE].add_reactions is True
 
+    def test_read_only_allows_replying_inside_a_thread(self):
+        # What makes the guide forum usable: a question under the guide it is
+        # about, without letting anyone open a channel-level topic.
+        table = build(bp.Access.READ_ONLY)
+        assert table[EVERYONE].send_messages_in_threads is True
+        assert table[EVERYONE].create_public_threads is False
+
     def test_read_only_still_lets_staff_write(self):
         table = build(bp.Access.READ_ONLY)
         assert table[STAFF].send_messages is True
