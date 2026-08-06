@@ -13,9 +13,10 @@ Quatre choses vivent ici :
    correspondante dans `butin-bdo` ou `rubin-bdo`, avec un lien croisé dans les deux sens.
 3. **Un pont de versions** : chaque publication GitHub s'annonce toute seule dans le salon
    de versions du logiciel concerné. Ça, c'est un simple webhook, aucun serveur à faire tourner.
-4. **Une bêta privée** : une catégorie réservée au rôle `Tester`, où chaque testeur remplit
-   sa configuration écran une seule fois. Elle est ensuite jointe automatiquement à tous ses
-   rapports de bug, avec la gestion des captures d'écran qui va avec.
+4. **Une fiche de configuration** : écran, échelle Windows, échelle de l'interface du jeu,
+   mode d'affichage, machine. Remplie une fois par n'importe quel membre, elle est ensuite
+   jointe automatiquement à tous ses rapports de bug, avec la gestion des captures qui va
+   avec. Plus une catégorie bêta privée, réservée au rôle `Tester`.
 
 ---
 
@@ -24,10 +25,10 @@ Quatre choses vivent ici :
 ```
 📢 Infos            bienvenue-welcome · règles-rules · annonces-announcements
 💬 Communauté       chat-fr · chat-en · captures-screenshots · Vocal
-🪙 Butin            butin-aide-help · butin-bugs (forum) · butin-idées-ideas (forum) · butin-versions-releases
-⏱️ Rubin            rubin-aide-help · rubin-bugs (forum) · rubin-idées-ideas (forum) · rubin-versions-releases
-🧪 Bêta   (privé)   beta-annonces-news · beta-chat · beta-configs · beta-retours-feedback (forum)
-🔒 Staff  (privé)   staff-chat · staff-journal
+🪙 Butin            butin-aide-help · butin-bugs (forum) · butin-suggestions (forum) · butin-versions-releases
+⏱️ Rubin            rubin-aide-help · rubin-bugs (forum) · rubin-suggestions (forum) · rubin-versions-releases
+🧪 Bêta   (privé)   beta-annonces-news · beta-chat · beta-retours-feedback (forum)
+🔒 Staff  (privé)   staff-chat · staff-configs · staff-journal
 ```
 
 Rôles créés, du haut vers le bas : `Dev`, `Mod`, `Tester`, `Joueur`, `Muted`.
@@ -36,7 +37,7 @@ Rôles créés, du haut vers le bas : `Dev`, `Mod`, `Tester`, `Joueur`, `Muted`.
 | --- | --- |
 | `Dev` | Administrateur. Le vôtre. |
 | `Mod` | Gérer messages et fils, exclure, rendre muet. Pas bannir. |
-| `Tester` | **La catégorie 🧪 Bêta**, invisible pour tous les autres. Donné à la main. |
+| `Tester` | **La catégorie 🧪 Bêta**, invisible pour tous les autres. Donné à la main. La fiche de config, elle, est ouverte à tous. |
 | `Joueur` | Posé automatiquement à l'arrivée. Sert à mentionner les humains sans `@everyone`. |
 | `Muted` | Retire écriture, fils et réactions sur **tous** les salons du plan. |
 
@@ -48,7 +49,7 @@ Les salons **FR et EN sont visibles par tout le monde**, sans rôle à choisir :
 n'est bloqué derrière un bouton de langue, et un anglophone voit tout de suite qu'il est
 au bon endroit.
 
-Les salons de bugs et d'idées sont des **forums**, avec des étiquettes de suivi
+Les salons de bugs et de suggestions sont des **forums**, avec des étiquettes de suivi
 (`Nouveau`, `Confirmé`, `Corrigé`, `Rejeté`). Un sujet = un fil, donc rien ne se perd
 dans le défilement.
 
@@ -123,13 +124,14 @@ Puis construisez pour de vrai :
 
 Le script crée les rôles et les met dans l'ordre, active le mode Communauté (obligatoire
 pour les forums), crée les salons, écrit les messages de bienvenue, de règlement et
-d'accueil bêta, et pose les panneaux de boutons dans les deux salons d'aide et dans
-`#beta-configs`. Il affiche à la fin ce qu'il a fait.
+d'accueil bêta, et pose dans chaque salon d'aide les deux panneaux (rapport et
+configuration). Il affiche à la fin ce qu'il a fait.
 
 > **Si le mode Communauté ne s'active pas tout seul** (Discord le refuse parfois selon
 > l'état du serveur), le script vous le dit et crée les forums en salons texte. Activez-le
-> à la main dans *Paramètres du serveur → Activer la communauté*, supprimez les quatre
-> salons de bugs/idées, puis relancez `--setup` : ils reviendront en forums.
+> à la main dans *Paramètres du serveur → Activer la communauté*, supprimez les salons de
+> bugs, de suggestions et de retours bêta, puis relancez `--setup` : ils reviendront en
+> forums.
 
 ### 6. Brancher les annonces de version
 
@@ -199,38 +201,51 @@ d'une panne d'un service tiers.
 
 ---
 
-## La bêta et les fiches de configuration
+## La fiche de configuration
 
 Butin et Rubin **lisent l'écran**. Le même exécutable ne se comporte pas pareil en
 1920x1080 à 100 % et en 2560x1440 à 150 %, ni en plein écran et en fenêtré sans bordure.
 Sans ces informations, un rapport de bug d'OCR est une devinette.
 
-D'où la **fiche de configuration**. Dans `#beta-configs`, un bouton ouvre un formulaire de
-cinq champs, qui est exactement le maximum autorisé par Discord :
+D'où la **fiche de configuration**. Elle n'est **pas réservée aux testeurs** : le panneau
+est posé dans les deux salons d'aide, à côté des boutons de rapport, parce que c'est
+justement au moment de signaler un bug qu'elle sert.
+
+Deux formulaires plutôt qu'un, parce que Discord plafonne un formulaire à cinq champs et
+que ces cinq-là doivent aller à l'écran :
+
+**🖥️ Mon écran et mon jeu** — ce qui décide du comportement de l'OCR
 
 | Champ | Pourquoi il est là |
 | --- | --- |
 | Résolution écran | Détermine la taille des zones à calibrer |
 | Échelle Windows | La cause la plus fréquente de calibrage faux, et celle à laquelle personne ne pense |
+| **Échelle de l'interface (jeu)** | Réglage propre à Black Desert, **indépendant de celui de Windows**. Il change directement la taille du texte à lire |
 | Affichage du jeu | Plein écran, fenêtré sans bordure et fenêtré ne capturent pas pareil |
 | Langue du jeu | Décide quel dictionnaire OCR s'applique |
-| Processeur, carte graphique, RAM | Pour les problèmes de lenteur et d'images manquées |
+
+**⚙️ Ma machine** — processeur, carte graphique, mémoire. Facultatif : ça explique une
+lenteur ou des images manquées, pas une lecture fausse.
+
+Les deux moitiés s'enregistrent **séparément**. Remplir « Ma machine » n'efface pas ce qui
+a été saisi dans « Mon écran » la semaine d'avant, et inversement. Ça a l'air évident, ça
+ne l'était pas : la première version écrasait tout, et c'est un essai qui l'a montré.
 
 La fiche est remplie **une fois**, stockée en SQLite, et **rejointe automatiquement à
 tous les rapports de bug suivants** de cette personne, côté Discord comme côté issue
-GitHub. Le testeur ne redonne jamais ces informations, et vous ne les redemandez jamais.
+GitHub. Le rapporteur ne redonne jamais ces informations, et vous ne les redemandez jamais.
 
-Le formulaire est pré-rempli à la réouverture : corriger une valeur ne demande pas de
-retaper les quatre autres. Chaque fiche est aussi miroitée dans `#beta-configs`, un
-message par testeur, mis à jour en place plutôt qu'empilé : le salon reste un annuaire.
+Les formulaires sont pré-remplis à la réouverture : corriger une valeur ne demande pas de
+retaper les autres. Chaque fiche est miroitée dans `#staff-configs`, un message par membre,
+mis à jour en place plutôt qu'empilé : le salon reste un annuaire, et il est **côté staff**
+parce que ce sont des informations matérielles sur des personnes réelles.
 
-Résolution et échelle sont normalisées à l'entrée : `2560 * 1440`, `2560×1440` et
+Résolutions et pourcentages sont normalisés à l'entrée : `2560 * 1440`, `2560×1440` et
 `2560 par 1440` donnent tous `2560x1440` ; `1.5`, `150` et `150 %` donnent `150%`.
 Un texte libre qui ne ressemble pas à une valeur est **laissé tel quel** plutôt que
 transformé, parce qu'une valeur inventée est pire que les mots de l'utilisateur.
 
-`/config` affiche sa propre fiche. `/config @membre` est réservé au staff : c'est de
-l'information matérielle sur une personne réelle, pas une donnée publique.
+`/config` affiche sa propre fiche. `/config @membre` est réservé au staff.
 
 ### Les captures d'écran
 
@@ -287,7 +302,8 @@ simple que de deviner quel droit manque.
 ## Les données stockées
 
 Une seule base, `data/profiles.db`, une seule table : les fiches de configuration, une
-par membre. Rien d'autre n'est conservé, ni les messages, ni les rapports, ni l'historique.
+par membre (résolution, échelle Windows, échelle de l'interface du jeu, mode d'affichage,
+langue du jeu, processeur, carte graphique, mémoire). Rien d'autre n'est conservé, ni les messages, ni les rapports, ni l'historique.
 
 Sur le VPS elle vit dans un volume Docker nommé, donc un `docker compose up --build` ne
 l'efface pas. Ce sont des informations matérielles sur des personnes réelles : la
@@ -301,7 +317,7 @@ consultation croisée est réservée au staff, et une fiche se supprime sur dema
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-214 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
+229 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
 qui se télescopent une fois normalisés par Discord, limites de caractères des formulaires
 et des étiquettes), les tables de permissions y compris l'étanchéité de la catégorie
 bêta, le stockage des fiches, la normalisation des résolutions et des échelles, la
@@ -314,7 +330,9 @@ produit en vrai :
 - deux libellés de formulaire à 48 et 49 caractères, au-dessus de la limite de 45, qui
   auraient fait rejeter le formulaire de suggestion à l'ouverture ;
 - un texte d'exemple à 110 caractères, au-dessus de la limite de 100, même conséquence
-  sur le formulaire de bug.
+  sur le formulaire de bug ;
+- une sauvegarde qui écrasait la moitié de la fiche : remplir « Ma machine » remettait à
+  zéro la résolution et les échelles saisies plus tôt.
 
 ---
 

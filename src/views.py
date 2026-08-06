@@ -14,7 +14,15 @@ import discord
 from . import blueprint as bp
 from . import texts
 from .github_bridge import GitHubClient, GitHubError, IssueDraft, build_labels, truncate_title
-from .profiles import Profile, ProfileStore, normalise_resolution, normalise_scaling
+from .profiles import (
+    LABELS_EN,
+    MACHINE_FIELDS,
+    SCREEN_FIELDS,
+    Profile,
+    ProfileStore,
+    normalise_resolution,
+    normalise_scaling,
+)
 
 log = logging.getLogger("discord-bdo.views")
 
@@ -33,7 +41,8 @@ def idea_button_id(slug: str) -> str:
     return f"{CUSTOM_ID_PREFIX}:idea:{slug}"
 
 
-SETUP_EDIT_ID = f"{CUSTOM_ID_PREFIX}:setup:edit"
+SETUP_SCREEN_ID = f"{CUSTOM_ID_PREFIX}:setup:screen"
+SETUP_MACHINE_ID = f"{CUSTOM_ID_PREFIX}:setup:machine"
 SETUP_SHOW_ID = f"{CUSTOM_ID_PREFIX}:setup:show"
 
 
@@ -92,14 +101,11 @@ def format_setup_rows(profile: Profile | None) -> str:
     """The setup rows appended to the GitHub issue's table."""
     if profile is None or profile.is_empty:
         return ""
-    rows = [
-        ("Resolution", profile.resolution),
-        ("Scaling", profile.scaling),
-        ("Display mode", profile.display_mode),
-        ("Game language", profile.game_language),
-        ("Hardware", profile.hardware),
-    ]
-    return "".join(f"| {name} | {value} |\n" for name, value in rows if value)
+    return "".join(
+        f"| {label} | {getattr(profile, attr)} |\n"
+        for attr, label in LABELS_EN
+        if getattr(profile, attr)
+    )
 
 
 async def ask_for_screenshot(thread: discord.Thread) -> None:
@@ -147,13 +153,15 @@ class ReportHandler:
             log.warning("profile lookup failed for %s: %s", user_id, exc)
             return None
 
-    async def save_profile(self, profile: Profile) -> bool:
+    async def save_profile(
+        self, profile: Profile, only: tuple[str, ...] | None = None
+    ) -> bool:
         """Persist a setup card. Returns whether it actually landed."""
         if self.profiles is None:
             log.warning("no profile store configured, setup card dropped")
             return False
         try:
-            await self.profiles.save(profile)
+            await self.profiles.save(profile, only=only)
         except Exception as exc:
             log.warning("profile save failed for %s: %s", profile.user_id, exc)
             return False
@@ -165,7 +173,7 @@ class ReportHandler:
         Editing in place rather than appending keeps the channel usable as a
         directory: one message per tester, always current.
         """
-        channel = self.channels.get(bp.KEY_BETA_SETUPS)
+        channel = self.channels.get(bp.KEY_STAFF_SETUPS)
         if not isinstance(channel, discord.TextChannel):
             return
         embed = setup_embed(profile)
@@ -433,88 +441,45 @@ class SupportPanel(discord.ui.View):
 
 
 # --------------------------------------------------------------------------- #
-# Beta: the hardware setup card
+# The setup card: screen form + machine form
 # --------------------------------------------------------------------------- #
 
 
-class SetupModal(discord.ui.Modal):
-    """Five fields, which is exactly Discord's per-modal limit.
+class _BaseSetupModal(discord.ui.Modal):
+    """Shared submit path for the two halves of the setup card.
 
-    Pre-filled from the stored card when there is one, so updating a single
-    value does not mean retyping the other four.
+    Subclasses declare ``COLUMNS`` and build their own fields; the save is
+    scoped to those columns so one form never blanks the other's values.
     """
 
-    def __init__(self, handler: ReportHandler, existing: Profile | None = None) -> None:
-        super().__init__(title=texts.MODAL_SETUP_TITLE)
+    COLUMNS: tuple[str, ...] = ()
+
+    def __init__(self, title: str, handler: ReportHandler) -> None:
+        super().__init__(title=title)
         self.handler = handler
 
-        def previous(attr: str) -> str:
-            return getattr(existing, attr, "") if existing else ""
-
-        self.resolution = discord.ui.TextInput(
-            label=texts.FIELD_RESOLUTION_LABEL,
-            placeholder=texts.FIELD_RESOLUTION_PLACEHOLDER,
-            default=previous("resolution") or None,
-            max_length=40,
-        )
-        self.scaling = discord.ui.TextInput(
-            label=texts.FIELD_SCALING_LABEL,
-            placeholder=texts.FIELD_SCALING_PLACEHOLDER,
-            default=previous("scaling") or None,
-            max_length=20,
-        )
-        self.display_mode = discord.ui.TextInput(
-            label=texts.FIELD_DISPLAY_MODE_LABEL,
-            placeholder=texts.FIELD_DISPLAY_MODE_PLACEHOLDER,
-            default=previous("display_mode") or None,
-            max_length=60,
-        )
-        self.game_language = discord.ui.TextInput(
-            label=texts.FIELD_GAME_LANGUAGE_LABEL,
-            placeholder=texts.FIELD_GAME_LANGUAGE_PLACEHOLDER,
-            default=previous("game_language") or None,
-            max_length=30,
-            required=False,
-        )
-        self.hardware = discord.ui.TextInput(
-            label=texts.FIELD_HARDWARE_LABEL,
-            placeholder=texts.FIELD_HARDWARE_PLACEHOLDER,
-            default=previous("hardware") or None,
-            style=discord.TextStyle.paragraph,
-            max_length=300,
-            required=False,
-        )
-        for item in (
-            self.resolution,
-            self.scaling,
-            self.display_mode,
-            self.game_language,
-            self.hardware,
-        ):
-            self.add_item(item)
+    def collect(self) -> dict[str, str]:  # pragma: no cover - overridden
+        raise NotImplementedError
 
     def to_profile(self, user: discord.abc.User) -> Profile:
         return Profile(
             user_id=user.id,
             display_name=getattr(user, "display_name", str(user)),
-            resolution=normalise_resolution(self.resolution.value),
-            scaling=normalise_scaling(self.scaling.value),
-            display_mode=self.display_mode.value.strip(),
-            game_language=self.game_language.value.strip(),
-            hardware=" ".join(self.hardware.value.split()),
+            **self.collect(),
         )
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await interaction.response.defer(ephemeral=True, thinking=True)
         profile = self.to_profile(interaction.user)
 
-        saved = await self.handler.save_profile(profile)
-        if not saved:
+        if not await self.handler.save_profile(profile, only=self.COLUMNS):
             await interaction.followup.send(texts.ERR_GENERIC, ephemeral=True)
             return
 
         await interaction.followup.send(texts.SETUP_SAVED, ephemeral=True)
-        await self.handler.publish_setup_card(profile)
+        # Publish the merged card, not just what this one form carried.
+        merged = await self.handler.profile_for(interaction.user.id) or profile
+        await self.handler.publish_setup_card(merged)
 
     async def on_error(
         self, interaction: discord.Interaction, error: Exception
@@ -523,38 +488,147 @@ class SetupModal(discord.ui.Modal):
         await _report_error(interaction)
 
 
+def _previous(existing, attr):
+    """Prefill value, or None so the field renders empty rather than "None"."""
+    return (getattr(existing, attr, "") if existing else "") or None
+
+
+class ScreenModal(_BaseSetupModal):
+    """Five fields, which is exactly Discord's per-modal limit.
+
+    These are the ones that decide how the OCR behaves, which is why the
+    machine specs were split into their own form rather than squeezed in here.
+    """
+
+    COLUMNS = SCREEN_FIELDS
+
+    def __init__(self, handler: ReportHandler, existing: Profile | None = None) -> None:
+        super().__init__(texts.MODAL_SCREEN_TITLE, handler)
+
+        self.resolution = discord.ui.TextInput(
+            label=texts.FIELD_RESOLUTION_LABEL,
+            placeholder=texts.FIELD_RESOLUTION_PLACEHOLDER,
+            default=_previous(existing, "resolution"),
+            max_length=40,
+        )
+        self.scaling = discord.ui.TextInput(
+            label=texts.FIELD_SCALING_LABEL,
+            placeholder=texts.FIELD_SCALING_PLACEHOLDER,
+            default=_previous(existing, "scaling"),
+            max_length=20,
+        )
+        self.ui_scale = discord.ui.TextInput(
+            label=texts.FIELD_UI_SCALE_LABEL,
+            placeholder=texts.FIELD_UI_SCALE_PLACEHOLDER,
+            default=_previous(existing, "ui_scale"),
+            max_length=20,
+        )
+        self.display_mode = discord.ui.TextInput(
+            label=texts.FIELD_DISPLAY_MODE_LABEL,
+            placeholder=texts.FIELD_DISPLAY_MODE_PLACEHOLDER,
+            default=_previous(existing, "display_mode"),
+            max_length=60,
+        )
+        self.game_language = discord.ui.TextInput(
+            label=texts.FIELD_GAME_LANGUAGE_LABEL,
+            placeholder=texts.FIELD_GAME_LANGUAGE_PLACEHOLDER,
+            default=_previous(existing, "game_language"),
+            max_length=30,
+            required=False,
+        )
+        for item in (
+            self.resolution,
+            self.scaling,
+            self.ui_scale,
+            self.display_mode,
+            self.game_language,
+        ):
+            self.add_item(item)
+
+    def collect(self) -> dict[str, str]:
+        return {
+            "resolution": normalise_resolution(self.resolution.value),
+            # Both scales are percentages typed by hand, so the same tolerant
+            # parser applies: "1.5", "150" and "150 %" all mean 150%.
+            "scaling": normalise_scaling(self.scaling.value),
+            "ui_scale": normalise_scaling(self.ui_scale.value),
+            "display_mode": self.display_mode.value.strip(),
+            "game_language": self.game_language.value.strip(),
+        }
+
+
+class MachineModal(_BaseSetupModal):
+    """The PC itself. Optional: it matters for slowness, not for OCR accuracy."""
+
+    COLUMNS = MACHINE_FIELDS
+
+    def __init__(self, handler: ReportHandler, existing: Profile | None = None) -> None:
+        super().__init__(texts.MODAL_MACHINE_TITLE, handler)
+
+        self.cpu = discord.ui.TextInput(
+            label=texts.FIELD_CPU_LABEL,
+            placeholder=texts.FIELD_CPU_PLACEHOLDER,
+            default=_previous(existing, "cpu"),
+            max_length=80,
+            required=False,
+        )
+        self.gpu = discord.ui.TextInput(
+            label=texts.FIELD_GPU_LABEL,
+            placeholder=texts.FIELD_GPU_PLACEHOLDER,
+            default=_previous(existing, "gpu"),
+            max_length=80,
+            required=False,
+        )
+        self.ram = discord.ui.TextInput(
+            label=texts.FIELD_RAM_LABEL,
+            placeholder=texts.FIELD_RAM_PLACEHOLDER,
+            default=_previous(existing, "ram"),
+            max_length=40,
+            required=False,
+        )
+        for item in (self.cpu, self.gpu, self.ram):
+            self.add_item(item)
+
+    def collect(self) -> dict[str, str]:
+        return {
+            "cpu": " ".join(self.cpu.value.split()),
+            "gpu": " ".join(self.gpu.value.split()),
+            "ram": " ".join(self.ram.value.split()),
+        }
+
+
 class SetupPanel(discord.ui.View):
     def __init__(self, handler: ReportHandler) -> None:
         super().__init__(timeout=None)
         self.handler = handler
 
-        edit = discord.ui.Button(
-            label=texts.BTN_SETUP,
-            style=discord.ButtonStyle.primary,
-            custom_id=SETUP_EDIT_ID,
+        buttons = (
+            (texts.BTN_SETUP_SCREEN, SETUP_SCREEN_ID, discord.ButtonStyle.primary,
+             self._on_screen),
+            (texts.BTN_SETUP_MACHINE, SETUP_MACHINE_ID, discord.ButtonStyle.secondary,
+             self._on_machine),
+            (texts.BTN_SETUP_SHOW, SETUP_SHOW_ID, discord.ButtonStyle.secondary,
+             self._on_show),
         )
-        edit.callback = self._on_edit
-        self.add_item(edit)
+        for label, custom_id, style, callback in buttons:
+            button = discord.ui.Button(label=label, style=style, custom_id=custom_id)
+            button.callback = callback
+            self.add_item(button)
 
-        show = discord.ui.Button(
-            label=texts.BTN_SETUP_SHOW,
-            style=discord.ButtonStyle.secondary,
-            custom_id=SETUP_SHOW_ID,
-        )
-        show.callback = self._on_show
-        self.add_item(show)
-
-    async def _on_edit(self, interaction: discord.Interaction) -> None:
+    async def _on_screen(self, interaction: discord.Interaction) -> None:
         existing = await self.handler.profile_for(interaction.user.id)
-        await interaction.response.send_modal(SetupModal(self.handler, existing))
+        await interaction.response.send_modal(ScreenModal(self.handler, existing))
+
+    async def _on_machine(self, interaction: discord.Interaction) -> None:
+        existing = await self.handler.profile_for(interaction.user.id)
+        await interaction.response.send_modal(MachineModal(self.handler, existing))
 
     async def _on_show(self, interaction: discord.Interaction) -> None:
         profile = await self.handler.profile_for(interaction.user.id)
         if profile is None or profile.is_empty:
-            channel = self.handler.channel_for(bp.KEY_BETA_SETUPS)
-            where = channel.mention if channel else "#beta-configs"
             await interaction.response.send_message(
-                texts.SETUP_EMPTY.format(channel=where), ephemeral=True
+                texts.SETUP_EMPTY.format(channel="ce salon / this channel"),
+                ephemeral=True,
             )
             return
         await interaction.response.send_message(

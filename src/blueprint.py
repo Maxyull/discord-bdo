@@ -147,8 +147,8 @@ KEY_RUBIN_IDEAS = "rubin_ideas"
 KEY_RUBIN_RELEASES = "rubin_releases"
 KEY_BETA_NEWS = "beta_news"
 KEY_BETA_CHAT = "beta_chat"
-KEY_BETA_SETUPS = "beta_setups"
 KEY_BETA_FEEDBACK = "beta_feedback"
+KEY_STAFF_SETUPS = "staff_setups"
 KEY_STAFF_LOG = "staff_log"
 
 #: Forum tags shared by every bug forum.
@@ -225,11 +225,11 @@ CATEGORIES: tuple[CategorySpec, ...] = (
                 ),
             ),
             ChannelSpec(
-                name="butin-idées-ideas",
+                name="butin-suggestions",
                 kind=ChannelKind.FORUM,
                 key=KEY_BUTIN_IDEAS,
                 tags=IDEA_TAGS,
-                topic="Un fil par idée. Votez avec une réaction. / One thread per idea.",
+                topic="Un fil par suggestion. Votez avec 👍. / One thread per suggestion, vote with 👍.",
             ),
             ChannelSpec(
                 name="butin-versions-releases",
@@ -258,11 +258,11 @@ CATEGORIES: tuple[CategorySpec, ...] = (
                 ),
             ),
             ChannelSpec(
-                name="rubin-idées-ideas",
+                name="rubin-suggestions",
                 kind=ChannelKind.FORUM,
                 key=KEY_RUBIN_IDEAS,
                 tags=IDEA_TAGS,
-                topic="Un fil par idée. Votez avec une réaction. / One thread per idea.",
+                topic="Un fil par suggestion. Votez avec 👍. / One thread per suggestion, vote with 👍.",
             ),
             ChannelSpec(
                 name="rubin-versions-releases",
@@ -288,15 +288,6 @@ CATEGORIES: tuple[CategorySpec, ...] = (
                 topic="Discussion entre testeurs / Chat between testers",
             ),
             ChannelSpec(
-                name="beta-configs",
-                key=KEY_BETA_SETUPS,
-                access=Access.BETA_READ_ONLY,
-                topic=(
-                    "Fiches de configuration des testeurs, remplies par le bouton. "
-                    "Tester setups, filled in from the button."
-                ),
-            ),
-            ChannelSpec(
                 name="beta-retours-feedback",
                 kind=ChannelKind.FORUM,
                 key=KEY_BETA_FEEDBACK,
@@ -311,6 +302,15 @@ CATEGORIES: tuple[CategorySpec, ...] = (
         channels=(
             ChannelSpec(
                 name="staff-chat", access=Access.STAFF_ONLY),
+            ChannelSpec(
+                name="staff-configs",
+                key=KEY_STAFF_SETUPS,
+                access=Access.STAFF_ONLY,
+                topic=(
+                    "Annuaire des fiches de configuration, une par membre, mise à "
+                    "jour en place. Données matérielles : ne pas ouvrir aux membres."
+                ),
+            ),
             ChannelSpec(
                 name="staff-journal",
                 key=KEY_STAFF_LOG,

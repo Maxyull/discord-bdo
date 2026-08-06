@@ -214,19 +214,6 @@ class BdoBot(discord.Client):
             )
             report.updated_channels.append(beta_news.name)
 
-        setups = channels.get(bp.KEY_BETA_SETUPS)
-        if isinstance(setups, discord.TextChannel):
-            view = SetupPanel(handler)
-            self.add_view(view)
-            await setup_guild._replace_bot_message(
-                setups, setup_panel_embed(), view=view
-            )
-            report.updated_channels.append(setups.name)
-        else:
-            report.warnings.append(
-                "Panneau de configuration non posté : salon beta-configs introuvable."
-            )
-
         for product in bp.PRODUCTS:
             channel = channels.get(product.help_channel_key)
             if not isinstance(channel, discord.TextChannel):
@@ -238,6 +225,14 @@ class BdoBot(discord.Client):
             self.add_view(view)
             await setup_guild._replace_bot_message(
                 channel, panel_embed(product), view=view
+            )
+            # The setup card is not a beta thing: anyone reporting a bug needs
+            # one, so the panel sits next to the report buttons in both help
+            # channels rather than behind the Tester role.
+            setup_view = SetupPanel(handler)
+            self.add_view(setup_view)
+            await setup_guild._replace_bot_message(
+                channel, setup_panel_embed(), view=setup_view
             )
             report.updated_channels.append(channel.name)
 
@@ -317,7 +312,7 @@ def register_commands(bot: BdoBot) -> None:
             channels = bot.channels_by_guild.get(
                 interaction.guild.id if interaction.guild else 0, {}
             )
-            channel = channels.get(bp.KEY_BETA_SETUPS)
+            channel = channels.get(bp.KEY_STAFF_SETUPS)
             where = channel.mention if channel else "#beta-configs"
             await interaction.response.send_message(
                 texts.SETUP_EMPTY.format(channel=where), ephemeral=True
