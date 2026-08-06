@@ -13,6 +13,7 @@ import logging
 import discord
 
 from . import blueprint as bp
+from . import guides
 from . import texts
 
 log = logging.getLogger("discord-bdo.setup")
@@ -358,6 +359,57 @@ async def _replace_bot_message(
     return await channel.send(embed=embed, view=view)
 
 
+async def existing_thread_titles(forum: discord.ForumChannel) -> set[str]:
+    """Titles already in the forum, active and archived.
+
+    Archived threads count: a guide nobody read for a week is archived by
+    Discord, and re-posting it would leave two copies with the same name.
+    """
+    titles = {thread.name for thread in forum.threads}
+    try:
+        async for thread in forum.archived_threads(limit=200):
+            titles.add(thread.name)
+    except discord.HTTPException as exc:  # missing permission, rate limit
+        log.warning("could not list archived threads: %s", exc)
+    return titles
+
+
+async def post_guides(
+    channels: dict[str, discord.abc.GuildChannel], report: bp.SetupReport
+) -> None:
+    """Seed the guide forum, skipping anything already there.
+
+    Existing threads are never edited: a guide corrected by hand on Discord
+    must survive the next ``/setup``.
+    """
+    forum = channels.get(bp.KEY_GUIDES)
+    if not isinstance(forum, discord.ForumChannel):
+        if forum is not None:
+            report.warnings.append(
+                "Guides non publiés : le salon n'est pas un forum "
+                "(mode Communauté inactif ?)."
+            )
+        return
+
+    already = await existing_thread_titles(forum)
+    by_name = {tag.name: tag for tag in forum.available_tags}
+
+    for guide in guides.GUIDES:
+        if guide.title in already:
+            report.skipped.append(f"guide {guide.title}")
+            continue
+        tags = [by_name[name] for name in guide.tags if name in by_name]
+        try:
+            await forum.create_thread(
+                name=guide.title, content=guide.body, applied_tags=tags
+            )
+        except discord.HTTPException as exc:
+            report.warnings.append(f"Guide « {guide.title} » non publié : {exc.text or exc}")
+            continue
+        report.created_channels.append(f"guide {guide.title}")
+        log.info("guide posted: %s", guide.title)
+
+
 async def post_static_messages(
     channels: dict[str, discord.abc.GuildChannel], report: bp.SetupReport
 ) -> None:
@@ -408,6 +460,7 @@ async def run(guild: discord.Guild, *, post_panels=None) -> bp.SetupReport:
             )
 
     await post_static_messages(channels, report)
+    await post_guides(channels, report)
 
     if post_panels is not None:
         await post_panels(guild, channels, report)

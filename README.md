@@ -115,8 +115,24 @@ posée sous le guide qu'elle concerne reste au bon endroit. C'est la raison pour
 le niveau « lecture seule » autorise les réponses en fil tout en interdisant d'ouvrir un
 sujet.
 
-Le forum est **vide au départ**, le script crée le salon et les étiquettes, pas le
-contenu.
+**Six guides sont publiés automatiquement** par le script, écrits à partir des README des
+deux projets :
+
+| Guide | Étiquettes |
+| --- | --- |
+| Installer Butin | Butin · Installation |
+| Premier lancement et calibrage | Butin · Calibrage |
+| Où sont mes sessions | Butin · Astuce |
+| Butin ne compte rien, que faire | Butin · Dépannage |
+| Installer Rubin | Rubin · Installation |
+| Est-ce autorisé, et que sort-il de mon PC | Butin · Rubin · Astuce |
+
+Ils sont posés **une fois**. Un guide déjà présent n'est ni recréé ni réécrit, y compris
+s'il a été archivé par Discord faute de lecture : vous pouvez donc les corriger à la main
+sur Discord sans qu'un `/setup` n'écrase votre travail.
+
+Leur contenu vient des README de `butin-bdo` et `rubin-bdo`, pas d'une reconstitution.
+Quand les logiciels changent, `src/guides.py` change avec eux.
 
 Le script **ne supprime jamais rien**. Relancé, il ne recrée que ce qui manque.
 
@@ -124,13 +140,18 @@ Le script **ne supprime jamais rien**. Relancé, il ne recrée que ce qui manque
 
 ## Mise en route
 
-### 1. Créer le serveur
+### 1. Le serveur existe déjà, ne pas en créer un autre
 
-Dans Discord, `+` en bas de la liste des serveurs → *Créer le mien* → *À usage personnel*.
-Nom au choix, par exemple `Butin & Rubin`. Laissez-le vide, le script s'occupe du reste.
+> ⚠️ **`BDO Tools Rubin Loot Tracker`**, identifiant **`1534377319945469972`**.
+>
+> Son lien d'invitation `discord.gg/qCuvN2Zna7` est **déjà publié dans les README publics
+> de `butin-bdo` et de `rubin-bdo`**. Les utilisateurs y arrivent donc dès maintenant.
+> Construire un second serveur laisserait ce lien pointer vers un serveur vide.
 
-Activez ensuite le mode développeur : *Paramètres utilisateur → Avancés → Mode développeur*.
-Clic droit sur l'icône du serveur → *Copier l'identifiant du serveur*. Gardez-le sous la main.
+C'est ce serveur-là qu'il faut passer au script. Son salon `general` existant ne sera pas
+touché : le script ne supprime jamais rien, il ajoute ce qui manque.
+
+Il n'a pas encore le mode Communauté, le script l'activera lui-même (voir l'étape 5).
 
 ### 2. Créer le bot
 
@@ -166,7 +187,8 @@ de `Dev`. Discord interdit à un bot de gérer un rôle placé plus haut que le 
 copy .env.example .env
 ```
 
-Remplissez `DISCORD_TOKEN` et `DISCORD_GUILD_ID`.
+Remplissez `DISCORD_TOKEN`. `DISCORD_GUILD_ID` est déjà renseigné dans `.env.example`
+avec l'identifiant du serveur existant, ne le changez pas sans raison.
 
 `GITHUB_TOKEN` est facultatif : sans lui tout fonctionne, il manque seulement la création
 automatique d'issues. Pour l'activer, créez un jeton sur
@@ -189,8 +211,9 @@ Puis construisez pour de vrai :
 
 Le script crée les rôles et les met dans l'ordre, active le mode Communauté (obligatoire
 pour les forums), crée les salons, écrit les messages de bienvenue, de règlement et
-d'accueil bêta, et pose dans chaque salon d'aide les deux panneaux (rapport et
-configuration). Il affiche à la fin ce qu'il a fait.
+d'accueil bêta, pose dans chaque salon d'aide les deux panneaux (rapport et
+configuration), et **publie les six guides de départ** dans le forum. Il affiche à la fin
+ce qu'il a fait.
 
 > **Si le mode Communauté ne s'active pas tout seul** (Discord le refuse parfois selon
 > l'état du serveur), le script vous le dit et crée les forums en salons texte. Activez-le
@@ -383,7 +406,7 @@ consultation croisée est réservée au staff, et une fiche se supprime sur dema
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-275 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
+308 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
 qui se télescopent une fois normalisés par Discord, limites de caractères des formulaires
 et des étiquettes), les tables de permissions y compris l'étanchéité de la catégorie
 bêta, le stockage des fiches, la normalisation des résolutions et des échelles, la

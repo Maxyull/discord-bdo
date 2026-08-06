@@ -13,6 +13,7 @@ import logging
 import sys
 
 from src import blueprint as bp
+from src import guides
 from src import setup_guild
 from src.bot import BdoBot
 from src.config import ConfigError, load
@@ -64,6 +65,8 @@ def check_blueprint() -> int:
     if uses_beta and bp.ROLE_TESTER not in role_names:
         problems.append(f"des salons exigent le rôle {bp.ROLE_TESTER!r}, absent de ROLES")
 
+    problems.extend(guides.check())
+
     total = len(list(bp.all_channel_specs()))
     print(f"Plan : {len(bp.CATEGORIES)} catégories, {total} salons, {len(bp.ROLES)} rôles.")
     print("Rôles, du haut vers le bas : " + " > ".join(r.name for r in bp.ROLES))
@@ -82,7 +85,8 @@ def check_blueprint() -> int:
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
-    print("\nPlan valide.")
+    print(f"\n{len(guides.GUIDES)} guides prêts à être publiés dans le forum.")
+    print("Plan valide.")
     return 0
 
 
