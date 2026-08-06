@@ -263,6 +263,64 @@ STATUS_TITLE = "{dot} {headline}"
 LOG_STATUS_CHANGE = "{dot} **{label}** : {before} → {after}{note}"
 
 # --------------------------------------------------------------------------- #
+# Versions
+# --------------------------------------------------------------------------- #
+
+VERSION_TITLE = "📦 Dernières versions / Latest versions"
+VERSION_LINE = "{emoji} **{label}** — `{tag}` · [télécharger / download]({url}) {stamp}"
+VERSION_LINE_ERROR = "{emoji} **{label}** — indisponible / unavailable ({error})"
+VERSION_FOOTER = (
+    "\n*Le numéro de version est en bas de la fenêtre du logiciel. "
+    "/ The version number is at the bottom of the app window.*"
+)
+
+# --------------------------------------------------------------------------- #
+# Arrivals
+# --------------------------------------------------------------------------- #
+
+WELCOME_MEMBER = """\
+Bienvenue {mention} 👋
+
+Deux outils gratuits pour Black Desert, sur PC : 🪙 **Butin** compte votre butin en direct, ⏱️ **Rubin** chronomètre vos quêtes.
+
+**Pour démarrer** : les guides d'installation et de calibrage sont dans {guides}.
+**Un bug ?** Remplissez d'abord votre fiche de configuration dans un salon d'aide : elle sera jointe à tous vos rapports, et sans elle un souci de lecture d'écran est indevinable.
+
+*Welcome! Both tools are French-first but English is welcome here. Install guides are in {guides}.*
+"""
+
+# --------------------------------------------------------------------------- #
+# Tester role
+# --------------------------------------------------------------------------- #
+
+TESTER_GIVEN = "✅ {member} a maintenant le rôle **{role}** et voit la catégorie bêta."
+TESTER_REMOVED = "✅ {member} n'a plus le rôle **{role}**."
+TESTER_NO_ROLE = (
+    "❌ Le rôle **{role}** n'existe pas. Lancez `/setup` d'abord."
+)
+TESTER_FORBIDDEN = (
+    "❌ Je ne peux pas modifier les rôles de cette personne. "
+    "Vérifiez que mon rôle est **au-dessus** de `{role}` dans la liste."
+)
+
+# --------------------------------------------------------------------------- #
+# Setup preflight
+# --------------------------------------------------------------------------- #
+
+PREFLIGHT_BLOCKED = """\
+❌ **Je ne peux pas construire le serveur, il me manque des droits.**
+
+{problems}
+
+Dans *Paramètres du serveur → Rôles*, donnez au bot un rôle **Administrateur** et
+**remontez-le tout en haut de la liste**, puis relancez `/setup`.
+"""
+PREFLIGHT_MISSING_PERM = "• permission manquante : **{name}**"
+PREFLIGHT_LOW_ROLE = (
+    "• mon rôle est placé **trop bas** : je ne peux pas gérer les rôles situés au-dessus du mien"
+)
+
+# --------------------------------------------------------------------------- #
 # Beta welcome
 # --------------------------------------------------------------------------- #
 

@@ -22,6 +22,7 @@ from . import texts
 from .config import Config
 from .github_bridge import GitHubClient
 from .profiles import ProfileStore
+from .releases import ReleaseClient, ReleaseError
 from .views import (
     ReportHandler,
     SetupPanel,
@@ -61,6 +62,7 @@ class BdoBot(discord.Client):
         self.tree = app_commands.CommandTree(self)
         self.github = GitHubClient(config.github_token) if config.github_token else None
         self.profiles = ProfileStore(config.profiles_path)
+        self.releases = ReleaseClient(config.github_token)
         #: Filled on ready, per guild id.
         self.channels_by_guild: dict[int, dict[str, discord.abc.GuildChannel]] = {}
         #: Last published status snapshot, so the board is only rewritten when
@@ -138,9 +140,13 @@ class BdoBot(discord.Client):
     # -- events -------------------------------------------------------------- #
 
     async def on_member_join(self, member: discord.Member) -> None:
-        """Give every human the Joueur role, so @everyone stays technical."""
+        """Give the Joueur role and point the newcomer at the guides."""
         if member.bot:
             return
+        await self.give_player_role(member)
+        await self.greet(member)
+
+    async def give_player_role(self, member: discord.Member) -> None:
         role = discord.utils.get(member.guild.roles, name=bp.ROLE_PLAYER)
         if role is None:
             return
@@ -148,6 +154,31 @@ class BdoBot(discord.Client):
             await member.add_roles(role, reason="discord-bdo: arrivée")
         except discord.HTTPException as exc:
             log.warning("could not give %s to %s: %s", bp.ROLE_PLAYER, member, exc)
+
+    async def greet(self, member: discord.Member) -> None:
+        """Welcome in the chat channel, not by DM.
+
+        A DM from a bot to someone who just joined reads as spam and is often
+        blocked outright; a public greeting also shows the room is alive.
+        """
+        channels = self.channels_by_guild.get(member.guild.id) or self.index_channels(
+            member.guild
+        )
+        chat = discord.utils.get(member.guild.text_channels, name="chat-fr")
+        if chat is None:
+            return
+        guides_channel = channels.get(bp.KEY_GUIDES)
+        guides_mention = (
+            guides_channel.mention if guides_channel else "`#guides-tutoriels`"
+        )
+        try:
+            await chat.send(
+                texts.WELCOME_MEMBER.format(
+                    mention=member.mention, guides=guides_mention
+                )
+            )
+        except discord.HTTPException as exc:
+            log.warning("could not greet %s: %s", member, exc)
 
     async def on_message(self, message: discord.Message) -> None:
         """Notice screenshots dropped into a report thread."""
@@ -327,6 +358,35 @@ def status_embed(results) -> discord.Embed:
     )
 
 
+async def versions_embed(bot: "BdoBot") -> discord.Embed:
+    """Latest published release of each tool, read live from GitHub."""
+    lines = []
+    for product in bp.PRODUCTS:
+        try:
+            release = await bot.releases.latest(product.repo)
+        except ReleaseError as exc:
+            lines.append(
+                texts.VERSION_LINE_ERROR.format(
+                    emoji=product.emoji, label=product.label, error=exc
+                )
+            )
+            continue
+        lines.append(
+            texts.VERSION_LINE.format(
+                emoji=product.emoji,
+                label=product.label,
+                tag=release.tag,
+                url=release.url,
+                stamp=release.stamp,
+            )
+        )
+    return discord.Embed(
+        title=texts.VERSION_TITLE,
+        description="\n".join(lines) + texts.VERSION_FOOTER,
+        colour=discord.Colour(0xE8A33D),
+    )
+
+
 def _is_staff(interaction: discord.Interaction) -> bool:
     member = interaction.user
     if not isinstance(member, discord.Member):
@@ -367,6 +427,16 @@ def register_commands(bot: BdoBot) -> None:
             return
 
         await interaction.response.defer(ephemeral=True, thinking=True)
+
+        # Say what is missing before building half a server.
+        problems = setup_guild.preflight(interaction.guild)
+        if problems:
+            await interaction.followup.send(
+                texts.PREFLIGHT_BLOCKED.format(problems="\n".join(problems)),
+                ephemeral=True,
+            )
+            return
+
         try:
             report = await setup_guild.run(interaction.guild, post_panels=bot.post_panels)
         except discord.Forbidden:
@@ -377,6 +447,58 @@ def register_commands(bot: BdoBot) -> None:
             )
             return
         await interaction.followup.send(f"```\n{report.summary()[:1900]}\n```", ephemeral=True)
+
+    @bot.tree.command(
+        name="version",
+        description="Dernières versions publiées / Latest published versions",
+    )
+    async def version_command(interaction: discord.Interaction) -> None:
+        await interaction.response.defer(thinking=True)
+        await interaction.followup.send(embed=await versions_embed(bot))
+
+    @bot.tree.command(
+        name="tester",
+        description="Donner ou retirer le rôle Tester (staff)",
+    )
+    @app_commands.describe(
+        membre="La personne concernée",
+        retirer="Cocher pour retirer le rôle au lieu de le donner",
+    )
+    @app_commands.default_permissions(manage_roles=True)
+    async def tester_command(
+        interaction: discord.Interaction,
+        membre: discord.Member,
+        retirer: bool = False,
+    ) -> None:
+        if interaction.guild is None or not _is_staff(interaction):
+            await interaction.response.send_message(
+                "Réservé au staff. / Staff only.", ephemeral=True
+            )
+            return
+
+        role = discord.utils.get(interaction.guild.roles, name=bp.ROLE_TESTER)
+        if role is None:
+            await interaction.response.send_message(
+                texts.TESTER_NO_ROLE.format(role=bp.ROLE_TESTER), ephemeral=True
+            )
+            return
+
+        try:
+            if retirer:
+                await membre.remove_roles(role, reason="discord-bdo: /tester")
+                message = texts.TESTER_REMOVED
+            else:
+                await membre.add_roles(role, reason="discord-bdo: /tester")
+                message = texts.TESTER_GIVEN
+        except discord.Forbidden:
+            await interaction.response.send_message(
+                texts.TESTER_FORBIDDEN.format(role=bp.ROLE_TESTER), ephemeral=True
+            )
+            return
+
+        await interaction.response.send_message(
+            message.format(member=membre.mention, role=bp.ROLE_TESTER), ephemeral=True
+        )
 
     @bot.tree.command(
         name="etat",

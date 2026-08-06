@@ -142,6 +142,54 @@ Rubin surveille cette seule zone, environ 400 × 160 pixels, et ne réveille la 
 """,
     ),
     Guide(
+        title="🪙 Le panneau posé sur le jeu",
+        tags=(TAG_BUTIN, TAG_TIP),
+        body="""\
+Butin a **deux fenêtres**, et on ne regarde pas la même selon ce qu'on fait.
+
+**La fenêtre principale**, avant et après la session. Deux onglets :
+- **Réglages** : le dossier des sessions, le calibrage de la zone de chat, le taux de taxe, et le bouton qui lance le grind.
+- **Historique** : vos sessions passées, avec durée, nombre d'objets, silver par heure et total net. Cliquez une ligne pour voir le détail du butin.
+
+**Le panneau en surimpression**, pendant le farm. *Commencer le grind* vous laisse cinq secondes pour basculer dans le jeu, puis pose un panneau **translucide par-dessus** :
+- silver par heure, total net, durée ;
+- **chaque drop au moment où il tombe**, avec sa quantité, sa valeur et son nom **coloré selon sa rareté** dans le jeu.
+
+Sans cadre, toujours au-dessus, déplaçable par sa barre de titre. C'est le seul écran à regarder en farmant, la fenêtre principale reste derrière le jeu.
+
+**Bouton Arrêter** : ferme la session et le panneau avec elle.
+
+**Pause** : le temps en pause est déduit de la durée, donc votre silver/heure ne s'effondre pas parce que vous êtes allé manger.
+
+💡 Placez le panneau **loin de la zone de chat calibrée**. Butin lit une capture d'écran : une fenêtre posée sur la zone qu'il lit est lue à la place de cette zone, et la transparence n'y change rien puisque c'est le mélange des deux qui est capturé.
+""",
+    ),
+    Guide(
+        title="⏱️ Lire le classement Rubin",
+        tags=(TAG_RUBIN, TAG_TIP),
+        body="""\
+Ouvrez la fenêtre de Rubin : quatre onglets.
+
+**Session** — où vous en êtes et ce qui vient.
+**Classement** — cherchez une quête par son nom, voyez les plus rapides.
+**Zones** — les trois rectangles que Rubin lit **et ce qu'il y lit à l'instant**. C'est l'onglet qui répond en une seconde à « pourquoi ça ne mesure rien ».
+**Réglages** — les curseurs, la langue du client, l'opacité.
+
+**Comment le classement est calculé**
+Par **quête**, pas par chaîne, et sur la **médiane** à partir de **trois mesures minimum**.
+
+- Par quête, parce qu'une chaîne moyenne ses quêtes rapides et ses lentes, alors qu'on choisit quête par quête.
+- Sur la médiane à partir de trois, parce qu'en dessous la première place irait toujours à une quête mesurée une seule fois par quelqu'un de chanceux.
+
+Tant que rien n'atteint le seuil, la fenêtre **le dit** au lieu d'afficher un tableau vide.
+
+**Pourquoi certaines de vos quêtes ne comptent pas**
+Rubin est un journal d'événements, pas un minuteur. Quand vous enchaînez vite, un bandeau d'accomplissement peut passer sans être vu. Rubin note ce qu'il voit et reconstruit après coup, en indiquant la qualité : **exacte** (les deux bandeaux vus), **déduite** (par la chaîne), ou **écartée**. Une quête écartée vaut mieux qu'une durée attribuée au hasard.
+
+⚠️ **Ne posez jamais la fenêtre sur une zone de lecture.** Elle se place d'elle-même à côté du panneau de quêtes et vous prévient si vous l'y déplacez.
+""",
+    ),
+    Guide(
         title="⚖️ Est-ce autorisé, et que sort-il de mon PC",
         tags=(TAG_BUTIN, TAG_RUBIN, TAG_TIP),
         body="""\

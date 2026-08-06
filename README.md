@@ -242,6 +242,31 @@ Relancé deux fois, il détecte le webhook existant et ne fait rien.
 
 ## Faire tourner le bot
 
+> ⚠️ **Un autre bot est déjà sur ce serveur.** `rubin-bot`, le robot de consultation du
+> classement Rubin, tourne sur le VPS depuis `/opt/rubin-bot` et est connecté en
+> permanence. Il expose `/rapides`, `/chaine` et `/quete` ; aucune commande d'ici ne
+> porte ces noms, et un test le vérifie. Les deux bots sont complémentaires : celui-ci
+> gère le serveur, l'autre répond sur les temps de quête.
+
+### Sur le VPS
+
+Voir [`deploiement/LISEZ-MOI.md`](deploiement/LISEZ-MOI.md). En résumé :
+
+```bash
+sudo bash deploiement/installer.sh
+```
+
+Un dossier par bot sous `/opt/discordbot/`, un service systemd chacun, un seul compte
+système non privilégié. Le script est idempotent et ne touche jamais au `.env`, donc le
+jeton survit aux mises à jour.
+
+**systemd plutôt que Docker** : le `Dockerfile` fonctionne, mais le VPS fait déjà tourner
+ses bots en systemd. Deux mécanismes pour la même chose sur la même machine, c'est une
+chose de plus à savoir le jour où ça casse.
+
+### Ailleurs
+
+
 En local, pour essayer :
 
 ```bash
@@ -268,7 +293,9 @@ Discord affiche « L'interaction a échoué » au clic. Les fils déjà créés,
 | Commande | Qui | Effet |
 | --- | --- | --- |
 | `/setup` | Staff | Reconstruit ou répare le serveur, sans rien supprimer |
+| `/version` | Tout le monde | Dernières versions publiées, lues en direct sur GitHub |
 | `/etat` | Tout le monde | Relance les sondes et affiche l'état en direct |
+| `/tester @membre` | Staff | Donne le rôle `Tester`, `retirer:true` pour l'enlever |
 | `/config` | Tout le monde | Affiche sa fiche de configuration |
 | `/config @membre` | Staff | Affiche la fiche de quelqu'un d'autre |
 | `/aide` | Tout le monde | Rappelle où sont les boutons de rapport |
@@ -409,7 +436,7 @@ consultation croisée est réservée au staff, et une fiche se supprime sur dema
 .venv\Scripts\python.exe -m pytest -q
 ```
 
-310 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
+350 tests, sans réseau ni jeton. Ils couvrent le plan du serveur (clés en double, noms
 qui se télescopent une fois normalisés par Discord, limites de caractères des formulaires
 et des étiquettes), les tables de permissions y compris l'étanchéité de la catégorie
 bêta, le stockage des fiches, la normalisation des résolutions et des échelles, la

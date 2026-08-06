@@ -1,0 +1,36 @@
+[Unit]
+Description=discord-bdo, robot du serveur Butin & Rubin
+Documentation=https://github.com/Maxyull/discord-bdo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/discordbot/discord-bdo
+ExecStart=/opt/discordbot/discord-bdo/.venv/bin/python main.py
+EnvironmentFile=/opt/discordbot/discord-bdo/.env
+
+# Discord drops the connection regularly; the bot must always come back.
+Restart=always
+RestartSec=10
+
+# The bot only makes outbound connections and writes one SQLite file.
+User=discordbot
+Group=discordbot
+StateDirectory=discordbot
+ReadWritePaths=/opt/discordbot/discord-bdo/data
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=discord-bdo
+
+[Install]
+WantedBy=multi-user.target
