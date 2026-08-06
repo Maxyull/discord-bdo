@@ -27,10 +27,16 @@ fi
 
 mkdir -p "${BASE}"
 
+# The tree belongs to ${RUN_USER} but this script runs as root, and git
+# refuses to work on a repository owned by someone else unless told to. Scoped
+# to this path rather than set globally: a blanket exception would cover every
+# repository on the machine.
+GIT=(git -c "safe.directory=${TARGET}")
+
 if [[ -d "${TARGET}/.git" ]]; then
   echo "== mise à jour du dépôt"
-  git -C "${TARGET}" fetch --quiet origin
-  git -C "${TARGET}" reset --hard --quiet origin/main
+  "${GIT[@]}" -C "${TARGET}" fetch --quiet origin
+  "${GIT[@]}" -C "${TARGET}" reset --hard --quiet origin/main
 else
   echo "== premier clonage"
   git clone --quiet "${REPO}" "${TARGET}"
