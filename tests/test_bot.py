@@ -27,7 +27,7 @@ def bot():
 class TestConstruction:
     def test_commands_are_registered_at_construction(self, bot):
         names = {cmd.name for cmd in bot.tree.get_commands()}
-        assert names == {"setup", "aide"}
+        assert names == {"setup", "aide", "config"}
 
     def test_setup_command_is_admin_only(self, bot):
         setup = next(c for c in bot.tree.get_commands() if c.name == "setup")
@@ -36,10 +36,16 @@ class TestConstruction:
     def test_members_intent_is_on_because_roles_are_needed(self, bot):
         assert bot.intents.members is True
 
-    def test_message_content_intent_stays_off(self, bot):
-        # It is a privileged intent the bot has no use for; asking for it would
-        # mean an extra approval step for nothing.
-        assert bot.intents.message_content is False
+    def test_message_content_intent_is_on_for_screenshot_detection(self, bot):
+        # Without it Discord blanks out message.attachments, so on_message
+        # would never see a screenshot and the detection would fail silently.
+        assert bot.intents.message_content is True
+
+    def test_config_command_is_open_to_everyone(self, bot):
+        # Members must be able to check their own card; the staff-only guard on
+        # looking up *someone else* lives in the handler, not in the command.
+        config = next(c for c in bot.tree.get_commands() if c.name == "config")
+        assert config.default_permissions is None
 
     def test_github_client_absent_without_token(self, bot):
         assert bot.github is None

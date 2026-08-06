@@ -5,6 +5,7 @@ from src import blueprint as bp
 from src import texts
 from src import views
 from src.github_bridge import GitHubError, IssueDraft
+from src.profiles import Profile
 
 
 class TestCustomIds:
@@ -264,8 +265,135 @@ class TestTextsAreBilingual:
             texts.FIELD_STEPS_LABEL,
             texts.FIELD_IDEA_LABEL,
             texts.FIELD_PROBLEM_LABEL,
+            texts.FIELD_RESOLUTION_LABEL,
+            texts.FIELD_SCALING_LABEL,
+            texts.FIELD_DISPLAY_MODE_LABEL,
+            texts.FIELD_GAME_LANGUAGE_LABEL,
+            texts.FIELD_HARDWARE_LABEL,
         ):
             assert len(label) <= 45, label
+
+    def test_placeholders_fit_the_100_char_limit(self):
+        for name in dir(texts):
+            if name.endswith("_PLACEHOLDER"):
+                assert len(getattr(texts, name)) <= 100, name
+
+    def test_setup_modal_title_fits_the_45_char_limit(self):
+        assert len(texts.MODAL_SETUP_TITLE) <= 45
+
+    def test_setup_buttons_fit_the_80_char_limit(self):
+        assert len(texts.BTN_SETUP) <= 80
+        assert len(texts.BTN_SETUP_SHOW) <= 80
+
+    def test_beta_welcome_is_bilingual_and_fits_an_embed(self):
+        assert "🇫🇷" in texts.BETA_WELCOME_BODY and "🇬🇧" in texts.BETA_WELCOME_BODY
+        assert len(texts.BETA_WELCOME_BODY) <= 4096
+
+    def test_setup_panel_body_is_bilingual_and_fits_an_embed(self):
+        assert "🇫🇷" in texts.SETUP_PANEL_BODY and "🇬🇧" in texts.SETUP_PANEL_BODY
+        assert len(texts.SETUP_PANEL_BODY) <= 4096
+
+
+class TestSetupPanel:
+    def test_two_persistent_buttons_with_stable_ids(self):
+        handler = views.ReportHandler(channels={}, github=None)
+        panel = views.SetupPanel(handler)
+        assert panel.timeout is None
+        assert {item.custom_id for item in panel.children} == {
+            views.SETUP_EDIT_ID,
+            views.SETUP_SHOW_ID,
+        }
+
+    def test_setup_ids_do_not_collide_with_product_ids(self):
+        product_ids = {views.bug_button_id(p.slug) for p in bp.PRODUCTS}
+        product_ids |= {views.idea_button_id(p.slug) for p in bp.PRODUCTS}
+        assert views.SETUP_EDIT_ID not in product_ids
+        assert views.SETUP_SHOW_ID not in product_ids
+
+
+class TestSetupModal:
+    def test_exactly_five_fields_which_is_the_discord_maximum(self):
+        modal = views.SetupModal(views.ReportHandler(channels={}, github=None))
+        assert len(modal.children) == 5
+
+    def test_fields_are_prefilled_from_an_existing_card(self):
+        existing = Profile(user_id=1, resolution="1920x1080", scaling="100%")
+        modal = views.SetupModal(
+            views.ReportHandler(channels={}, github=None), existing
+        )
+        assert modal.resolution.default == "1920x1080"
+        assert modal.scaling.default == "100%"
+
+    def test_missing_values_leave_the_field_blank_not_the_string_none(self):
+        modal = views.SetupModal(views.ReportHandler(channels={}, github=None))
+        assert modal.resolution.default is None
+
+    def test_only_resolution_scaling_and_mode_are_required(self):
+        modal = views.SetupModal(views.ReportHandler(channels={}, github=None))
+        assert modal.resolution.required is True
+        assert modal.scaling.required is True
+        assert modal.display_mode.required is True
+        assert modal.game_language.required is False
+        assert modal.hardware.required is False
+
+
+class FakeUser:
+    id = 42
+    display_name = "Testeur"
+
+
+class TestSetupModalToProfile:
+    def build(self, **values):
+        modal = views.SetupModal(views.ReportHandler(channels={}, github=None))
+        for field, value in values.items():
+            getattr(modal, field)._value = value
+        return modal
+
+    def test_values_are_normalised_on_the_way_in(self):
+        modal = self.build(
+            resolution="2560 * 1440",
+            scaling="1.5",
+            display_mode="  fenêtré  ",
+            game_language="français",
+            hardware="RTX  3060\n16 Go",
+        )
+        profile = modal.to_profile(FakeUser())
+        assert profile.resolution == "2560x1440"
+        assert profile.scaling == "150%"
+        assert profile.display_mode == "fenêtré"
+        assert profile.hardware == "RTX 3060 16 Go"
+
+    def test_the_discord_user_id_is_the_key(self):
+        profile = self.build(
+            resolution="1920x1080", scaling="100%", display_mode="fullscreen"
+        ).to_profile(FakeUser())
+        assert profile.user_id == 42
+        assert profile.display_name == "Testeur"
+
+
+class TestProfileFailuresAreSurvivable:
+    class BrokenStore:
+        async def get(self, user_id):
+            raise RuntimeError("database is locked")
+
+        async def save(self, profile):
+            raise RuntimeError("disk full")
+
+    async def test_a_broken_lookup_returns_none_instead_of_raising(self):
+        handler = views.ReportHandler(
+            channels={}, github=None, profiles=self.BrokenStore()
+        )
+        assert await handler.profile_for(1) is None
+
+    async def test_a_broken_save_is_reported_as_a_failure(self):
+        handler = views.ReportHandler(
+            channels={}, github=None, profiles=self.BrokenStore()
+        )
+        assert await handler.save_profile(Profile(user_id=1)) is False
+
+    async def test_saving_without_a_store_fails_rather_than_pretending(self):
+        handler = views.ReportHandler(channels={}, github=None)
+        assert await handler.save_profile(Profile(user_id=1)) is False
 
     def test_embed_descriptions_fit_the_4096_char_limit(self):
         assert len(texts.WELCOME_BODY) <= 4096

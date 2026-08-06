@@ -30,6 +30,7 @@ def overwrites_for(
     staff: discord.Role | None,
     moderator: discord.Role | None,
     muted: discord.Role | None,
+    tester: discord.Role | None = None,
     bot_member: discord.Member | None = None,
 ) -> dict:
     """Build the permission table for one access level."""
@@ -46,6 +47,19 @@ def overwrites_for(
             create_public_threads=False,
             add_reactions=True,
         )
+    elif access in (bp.Access.BETA_ONLY, bp.Access.BETA_READ_ONLY):
+        result[everyone] = discord.PermissionOverwrite(view_channel=False)
+        if tester is not None:
+            result[tester] = discord.PermissionOverwrite(
+                view_channel=True,
+                read_message_history=True,
+                add_reactions=True,
+                # Read-only beta channels still let testers reply inside a
+                # thread: the channel stays clean, the discussion stays alive.
+                send_messages=access is bp.Access.BETA_ONLY,
+                send_messages_in_threads=True,
+                create_public_threads=access is bp.Access.BETA_ONLY,
+            )
     elif access is bp.Access.STAFF_ONLY:
         result[everyone] = discord.PermissionOverwrite(view_channel=False)
     else:  # pragma: no cover - Access is exhaustive
@@ -77,6 +91,21 @@ def overwrites_for(
 # --------------------------------------------------------------------------- #
 # Lookup helpers
 # --------------------------------------------------------------------------- #
+
+
+#: Access levels that hide a channel from @everyone. A channel left at the
+#: PUBLIC default inside one of these categories must inherit the restriction,
+#: otherwise a single forgotten `access=` leaks a private channel to the world.
+RESTRICTED = (bp.Access.BETA_ONLY, bp.Access.STAFF_ONLY)
+
+
+def effective_access(
+    category: bp.CategorySpec, channel: bp.ChannelSpec
+) -> bp.Access:
+    """Resolve a channel's access against its category's."""
+    if category.access in RESTRICTED and channel.access is bp.Access.PUBLIC:
+        return category.access
+    return channel.access
 
 
 def find_role(guild: discord.Guild, name: str) -> discord.Role | None:
@@ -127,7 +156,41 @@ async def ensure_roles(guild: discord.Guild, report: bp.SetupReport) -> dict[str
         else:
             roles[spec.name] = existing
             report.skipped.append(f"rôle {spec.name}")
+
+    await order_roles(guild, roles, report)
     return roles
+
+
+async def order_roles(
+    guild: discord.Guild, roles: dict[str, discord.Role], report: bp.SetupReport
+) -> None:
+    """Put the roles in blueprint order, Dev at the top.
+
+    Discord decides who can moderate whom by list position, not by permission
+    name, so a Mod role sitting under Joueur cannot time anyone out. Creation
+    order alone does not guarantee this, hence the explicit pass.
+    """
+    ordered = [roles[spec.name] for spec in bp.ROLES if spec.name in roles]
+    if not ordered:
+        return
+
+    # Position 0 is @everyone, so the lowest blueprint role starts at 1.
+    positions = {
+        role: index for index, role in enumerate(reversed(ordered), start=1)
+    }
+    if all(role.position == position for role, position in positions.items()):
+        return
+
+    try:
+        await guild.edit_role_positions(positions=positions, reason="discord-bdo setup")
+    except discord.HTTPException as exc:
+        report.warnings.append(
+            "Ordre des rôles non appliqué "
+            f"({getattr(exc, 'text', None) or exc}). "
+            "Remontez le rôle du bot au-dessus de Dev, puis relancez /setup."
+        )
+        return
+    report.updated_roles.extend(spec.name for spec in bp.ROLES if spec.name in roles)
 
 
 async def ensure_community(guild: discord.Guild, report: bp.SetupReport) -> bool:
@@ -228,9 +291,10 @@ async def ensure_channels(
         return overwrites_for(
             access,
             everyone=everyone,
-            staff=roles.get(bp.ROLE_STAFF),
-            moderator=roles.get(bp.ROLE_MODERATOR),
+            staff=roles.get(bp.ROLE_DEV),
+            moderator=roles.get(bp.ROLE_MOD),
             muted=roles.get(bp.ROLE_MUTED),
+            tester=roles.get(bp.ROLE_TESTER),
             bot_member=bot_member,
         )
 
@@ -248,11 +312,7 @@ async def ensure_channels(
             report.skipped.append(f"catégorie {cat_spec.name}")
 
         for ch_spec in cat_spec.channels:
-            access = (
-                bp.Access.STAFF_ONLY
-                if cat_spec.access is bp.Access.STAFF_ONLY
-                else ch_spec.access
-            )
+            access = effective_access(cat_spec, ch_spec)
             existing = find_channel(category, ch_spec.name)
             if existing is None:
                 existing = await _create_channel(
@@ -277,13 +337,18 @@ async def ensure_channels(
 async def _replace_bot_message(
     channel: discord.TextChannel, embed: discord.Embed, *, view=None
 ) -> discord.Message:
-    """Post ``embed``, editing the bot's previous message if there is one.
+    """Post ``embed``, editing the bot's previous copy of *this* embed.
 
-    Without this the setup script would stack a new copy of the rules every
-    time it runs.
+    Matching on the embed title rather than on "any embed by the bot" matters
+    in #beta-configs, where the bot also posts one setup card per tester: a
+    looser match would overwrite a member's card with the panel.
     """
-    async for message in channel.history(limit=50):
-        if message.author.id == channel.guild.me.id and message.embeds:
+    async for message in channel.history(limit=100):
+        if (
+            message.author.id == channel.guild.me.id
+            and message.embeds
+            and message.embeds[0].title == embed.title
+        ):
             await message.edit(embed=embed, view=view)
             return message
     return await channel.send(embed=embed, view=view)

@@ -75,8 +75,8 @@ FIELD_VERSION_PLACEHOLDER = "visible en bas de la fenêtre, ex. 1.4.2"
 FIELD_SYSTEM_LABEL = "Système / Operating system"
 FIELD_STEPS_LABEL = "Étapes pour reproduire / Steps to reproduce"
 FIELD_STEPS_PLACEHOLDER = (
-    "1. J'ouvre l'application\n2. Je lance une session\n3. Je ramasse un objet\n"
-    "Ce que j'attendais :\nCe qui se passe :"
+    "1. J'ouvre l'appli\n2. Je lance une session\n3. Je ramasse un objet\n"
+    "Attendu :\nObtenu :"
 )
 
 # --------------------------------------------------------------------------- #
@@ -99,9 +99,14 @@ THREAD_BUG_BODY = """\
 **Rapporté par / Reported by** {author}
 **Version** {version}
 **Système / OS** {system}
-
+{setup}
 **Étapes pour reproduire / Steps to reproduce**
 {steps}
+"""
+
+#: Inserted into THREAD_BUG_BODY when the reporter has a setup card.
+THREAD_BUG_SETUP = """\
+{lines}
 """
 
 THREAD_IDEA_BODY = """\
@@ -143,7 +148,7 @@ Reported on Discord by **{author}**.
 |---|---|
 | Version | {version} |
 | OS | {system} |
-
+{setup_rows}
 ### Summary
 {summary}
 
@@ -165,6 +170,103 @@ Suggested on Discord by **{author}**.
 
 ---
 Discord thread: {thread_url}
+"""
+
+# --------------------------------------------------------------------------- #
+# Beta: hardware profile
+# --------------------------------------------------------------------------- #
+
+SETUP_PANEL_TITLE = "🖥️ Ma configuration / My setup"
+
+SETUP_PANEL_BODY = """\
+**🇫🇷** Butin et Rubin **lisent votre écran**. La même version ne se comporte pas pareil en 1920x1080 à 100 % et en 2560x1440 à 150 %, ni en plein écran et en fenêtré.
+
+Remplissez cette fiche **une seule fois** : elle sera jointe automatiquement à tous vos rapports de bug, et vous n'aurez plus jamais à redonner ces informations.
+
+**🇬🇧** Butin and Rubin **read your screen**. The same build behaves differently at 1920x1080 100% and at 2560x1440 150%, and differently again in fullscreen versus borderless.
+
+Fill this in **once**: it gets attached to every bug report you send afterwards, so you never have to repeat it.
+"""
+
+BTN_SETUP = "🖥️ Remplir ma config / Fill in my setup"
+BTN_SETUP_SHOW = "👁️ Voir ma config / Show my setup"
+
+MODAL_SETUP_TITLE = "Ma configuration / My setup"
+FIELD_RESOLUTION_LABEL = "Résolution écran / Screen resolution"
+FIELD_RESOLUTION_PLACEHOLDER = "2560x1440"
+FIELD_SCALING_LABEL = "Échelle Windows / Windows scaling"
+FIELD_SCALING_PLACEHOLDER = "100%, 125%, 150%... (Paramètres > Affichage)"
+FIELD_DISPLAY_MODE_LABEL = "Affichage du jeu / Game display mode"
+FIELD_DISPLAY_MODE_PLACEHOLDER = "plein écran, fenêtré sans bordure, fenêtré"
+FIELD_GAME_LANGUAGE_LABEL = "Langue du jeu / Game language"
+FIELD_GAME_LANGUAGE_PLACEHOLDER = "français, english..."
+FIELD_HARDWARE_LABEL = "Processeur, carte graphique, RAM"
+FIELD_HARDWARE_PLACEHOLDER = "Ryzen 5 5600 / RTX 3060 / 16 Go"
+
+SETUP_CARD = """\
+**Configuration de {author}**
+{lines}
+
+*Mise à jour / Updated: {updated}*
+"""
+
+SETUP_SAVED = (
+    "✅ Fiche enregistrée. Elle sera jointe à vos prochains rapports.\n"
+    "Setup saved. It will be attached to your next reports."
+)
+SETUP_EMPTY = (
+    "Vous n'avez pas encore de fiche. Utilisez le bouton "
+    "« Remplir ma config » dans {channel}.\n"
+    "You have no setup yet, use the \"Fill in my setup\" button in {channel}."
+)
+SETUP_MISSING_IN_REPORT = (
+    "\n*Pas de fiche de configuration. / No setup on file.*"
+)
+
+# --------------------------------------------------------------------------- #
+# Screenshots
+# --------------------------------------------------------------------------- #
+
+SCREENSHOT_ASK = """\
+**🇫🇷** Ajoutez une **capture d'écran** dans ce fil, elle vaut dix lignes de description.
+Glissez l'image ici, ou `Impr. écran` puis `Ctrl+V`. Pour Butin, cadrez la **fenêtre du jeu entière**, pas seulement le compteur : le calibrage dépend de ce qu'il y a autour.
+Une vidéo courte marche aussi si le problème bouge.
+
+**🇬🇧** Drop a **screenshot** in this thread, it is worth ten lines of text.
+Drag the image here, or `PrtScn` then `Ctrl+V`. For Butin, frame the **whole game window**, not just the counter: calibration depends on the surroundings.
+A short video works too if the problem moves.
+"""
+
+SCREENSHOT_THANKS = (
+    "📎 Capture bien reçue, merci. / Screenshot received, thank you."
+)
+
+LOG_SCREENSHOT = "📎 Capture ajoutée à {link} par {author}"
+
+# --------------------------------------------------------------------------- #
+# Beta welcome
+# --------------------------------------------------------------------------- #
+
+BETA_WELCOME_TITLE = "🧪 Bêta / Beta"
+
+BETA_WELCOME_BODY = """\
+**🇫🇷**
+Vous voyez ces salons parce que vous avez le rôle **Tester**. Ce que ça implique :
+
+> Les versions postées ici **ne sont pas finies**. Elles peuvent compter faux, planter, ou repartir de zéro. Ne les utilisez pas pour une session dont le résultat compte.
+> Ce qui est dit ici reste ici tant que la version n'est pas publique.
+> Le plus utile n'est pas « ça marche pas », c'est **votre config + ce que vous faisiez + une capture**.
+
+Commencez par remplir votre fiche dans le salon des configs, c'est ce qui rend vos retours exploitables.
+
+**🇬🇧**
+You see these channels because you have the **Tester** role. What it means:
+
+> Builds posted here **are not finished**. They may miscount, crash, or be scrapped. Do not use them for a session whose result matters.
+> What is said here stays here until the build is public.
+> The most useful report is not "it doesn't work", it is **your setup + what you were doing + a screenshot**.
+
+Start by filling in your setup card, that is what makes your feedback usable.
 """
 
 # --------------------------------------------------------------------------- #

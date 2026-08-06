@@ -17,9 +17,12 @@ from enum import Enum
 
 #: Role granted to the owner. Never created by the bot (Discord assigns the
 #: server owner implicitly); listed here so permission tables can reference it.
-ROLE_STAFF = "Staff"
-ROLE_MODERATOR = "Moderator"
+ROLE_DEV = "Dev"
+ROLE_MOD = "Mod"
+#: Gates the private beta category. Handed out by the staff, never automatic.
 ROLE_TESTER = "Tester"
+#: Given to every human on arrival, so @everyone can stay a technical fallback.
+ROLE_PLAYER = "Joueur"
 ROLE_MUTED = "Muted"
 
 
@@ -33,16 +36,18 @@ class RoleSpec:
     permissions: tuple[str, ...] = ()
 
 
+#: Order matters: index 0 sits at the top of the server's role list. Discord
+#: refuses to let a role manage anything placed above it, so Dev must lead.
 ROLES: tuple[RoleSpec, ...] = (
     RoleSpec(
-        name=ROLE_STAFF,
+        name=ROLE_DEV,
         colour=0xE8A33D,  # amber, matches the Butin accent
         hoist=True,
         mentionable=True,
         permissions=("administrator",),
     ),
     RoleSpec(
-        name=ROLE_MODERATOR,
+        name=ROLE_MOD,
         colour=0x4E9BD1,
         hoist=True,
         mentionable=True,
@@ -60,8 +65,14 @@ ROLES: tuple[RoleSpec, ...] = (
     RoleSpec(
         name=ROLE_TESTER,
         colour=0x6BBF59,
-        hoist=False,
+        hoist=True,
         mentionable=True,
+    ),
+    RoleSpec(
+        name=ROLE_PLAYER,
+        colour=0x9AA4B2,
+        hoist=False,
+        mentionable=False,
     ),
     RoleSpec(
         name=ROLE_MUTED,
@@ -90,6 +101,10 @@ class Access(str, Enum):
     PUBLIC = "public"
     #: Everyone reads, only staff writes (announcements, rules).
     READ_ONLY = "read_only"
+    #: Only the Tester role (and staff) sees the channel at all.
+    BETA_ONLY = "beta_only"
+    #: Testers read, only staff writes.
+    BETA_READ_ONLY = "beta_read_only"
     #: Only staff sees the channel at all.
     STAFF_ONLY = "staff_only"
 
@@ -130,11 +145,20 @@ KEY_RUBIN_HELP = "rubin_help"
 KEY_RUBIN_BUGS = "rubin_bugs"
 KEY_RUBIN_IDEAS = "rubin_ideas"
 KEY_RUBIN_RELEASES = "rubin_releases"
+KEY_BETA_NEWS = "beta_news"
+KEY_BETA_CHAT = "beta_chat"
+KEY_BETA_SETUPS = "beta_setups"
+KEY_BETA_FEEDBACK = "beta_feedback"
 KEY_STAFF_LOG = "staff_log"
 
 #: Forum tags shared by every bug forum.
 BUG_TAGS = ("Nouveau / New", "Confirmé / Confirmed", "Corrigé / Fixed", "Rejeté / Declined")
 IDEA_TAGS = ("Nouveau / New", "Retenu / Planned", "Fait / Shipped", "Rejeté / Declined")
+BETA_TAGS = ("Nouveau / New", "Lu / Seen", "Traité / Handled")
+
+#: Applied to a bug thread once a screenshot lands in it. Kept out of BUG_TAGS
+#: on purpose: it is a state the bot sets, not one a reporter picks.
+TAG_HAS_SCREENSHOT = "Capture / Screenshot"
 
 
 CATEGORIES: tuple[CategorySpec, ...] = (
@@ -194,7 +218,7 @@ CATEGORIES: tuple[CategorySpec, ...] = (
                 name="butin-bugs",
                 kind=ChannelKind.FORUM,
                 key=KEY_BUTIN_BUGS,
-                tags=BUG_TAGS,
+                tags=BUG_TAGS + (TAG_HAS_SCREENSHOT,),
                 topic=(
                     "Un fil par bug. Utilisez le bouton dans #butin-aide-help pour "
                     "que la version et le système soient remplis automatiquement."
@@ -227,7 +251,7 @@ CATEGORIES: tuple[CategorySpec, ...] = (
                 name="rubin-bugs",
                 kind=ChannelKind.FORUM,
                 key=KEY_RUBIN_BUGS,
-                tags=BUG_TAGS,
+                tags=BUG_TAGS + (TAG_HAS_SCREENSHOT,),
                 topic=(
                     "Un fil par bug. Utilisez le bouton dans #rubin-aide-help pour "
                     "que la version et le système soient remplis automatiquement."
@@ -245,6 +269,39 @@ CATEGORIES: tuple[CategorySpec, ...] = (
                 key=KEY_RUBIN_RELEASES,
                 access=Access.READ_ONLY,
                 topic="Publications automatiques depuis GitHub / Automatic GitHub releases",
+            ),
+        ),
+    ),
+    CategorySpec(
+        name="🧪 Bêta",
+        access=Access.BETA_ONLY,
+        channels=(
+            ChannelSpec(
+                name="beta-annonces-news",
+                key=KEY_BETA_NEWS,
+                access=Access.BETA_READ_ONLY,
+                topic="Versions de test, ce qu'il faut essayer / Test builds and what to try",
+            ),
+            ChannelSpec(
+                name="beta-chat",
+                key=KEY_BETA_CHAT,
+                topic="Discussion entre testeurs / Chat between testers",
+            ),
+            ChannelSpec(
+                name="beta-configs",
+                key=KEY_BETA_SETUPS,
+                access=Access.BETA_READ_ONLY,
+                topic=(
+                    "Fiches de configuration des testeurs, remplies par le bouton. "
+                    "Tester setups, filled in from the button."
+                ),
+            ),
+            ChannelSpec(
+                name="beta-retours-feedback",
+                kind=ChannelKind.FORUM,
+                key=KEY_BETA_FEEDBACK,
+                tags=BETA_TAGS,
+                topic="Un fil par retour de test / One thread per test report",
             ),
         ),
     ),

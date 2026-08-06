@@ -15,23 +15,42 @@ from discord import app_commands
 
 from . import blueprint as bp
 from . import setup_guild
+from . import texts
 from .config import Config
 from .github_bridge import GitHubClient
-from .views import ReportHandler, SupportPanel, panel_embed
+from .profiles import ProfileStore
+from .views import (
+    ReportHandler,
+    SetupPanel,
+    SupportPanel,
+    panel_embed,
+    setup_panel_embed,
+)
+from .views import setup_embed as views_setup_embed
 
 log = logging.getLogger("discord-bdo.bot")
+
+#: Attachment types counted as a usable screenshot.
+IMAGE_TYPES = ("image/",)
+VIDEO_TYPES = ("video/",)
 
 
 class BdoBot(discord.Client):
     def __init__(self, config: Config) -> None:
         intents = discord.Intents.default()
-        # Members are needed to resolve roles when applying permissions.
+        # Members are needed to resolve roles when applying permissions, and to
+        # hand out the Joueur role on arrival.
         intents.members = True
+        # Attachments are blanked out without this intent, so screenshot
+        # detection would silently never fire. It is privileged but free to
+        # enable below 100 servers.
+        intents.message_content = True
         super().__init__(intents=intents)
 
         self.config = config
         self.tree = app_commands.CommandTree(self)
         self.github = GitHubClient(config.github_token) if config.github_token else None
+        self.profiles = ProfileStore(config.profiles_path)
         #: Filled on ready, per guild id.
         self.channels_by_guild: dict[int, dict[str, discord.abc.GuildChannel]] = {}
 
@@ -42,6 +61,7 @@ class BdoBot(discord.Client):
     # -- lifecycle ---------------------------------------------------------- #
 
     async def setup_hook(self) -> None:
+        await self.profiles.setup()
         if self.config.guild_id:
             guild = discord.Object(id=self.config.guild_id)
             self.tree.copy_global_to(guild=guild)
@@ -60,6 +80,7 @@ class BdoBot(discord.Client):
                 # Re-registering the view is what makes buttons posted by a
                 # previous run keep working after a restart.
                 self.add_view(SupportPanel(product, handler))
+            self.add_view(SetupPanel(handler))
         await self.change_presence(
             activity=discord.Game(name="Butin & Rubin · /aide")
         )
@@ -94,6 +115,81 @@ class BdoBot(discord.Client):
             default_labels=self.config.github_default_labels,
             staff_log=staff_log if isinstance(staff_log, discord.TextChannel) else None,
             dry_run=self.config.dry_run,
+            profiles=self.profiles,
+        )
+
+    # -- events -------------------------------------------------------------- #
+
+    async def on_member_join(self, member: discord.Member) -> None:
+        """Give every human the Joueur role, so @everyone stays technical."""
+        if member.bot:
+            return
+        role = discord.utils.get(member.guild.roles, name=bp.ROLE_PLAYER)
+        if role is None:
+            return
+        try:
+            await member.add_roles(role, reason="discord-bdo: arrivée")
+        except discord.HTTPException as exc:
+            log.warning("could not give %s to %s: %s", bp.ROLE_PLAYER, member, exc)
+
+    async def on_message(self, message: discord.Message) -> None:
+        """Notice screenshots dropped into a report thread."""
+        if message.author.bot or not message.attachments:
+            return
+        thread = message.channel
+        if not isinstance(thread, discord.Thread):
+            return
+        if not isinstance(thread.parent, discord.ForumChannel):
+            return
+        if not self.is_report_forum(thread.parent):
+            return
+        if not any(is_visual(attachment) for attachment in message.attachments):
+            return
+        await self.mark_screenshot(thread, message)
+
+    def is_report_forum(self, forum: discord.ForumChannel) -> bool:
+        channels = self.channels_by_guild.get(forum.guild.id, {})
+        watched = {
+            channels.get(key)
+            for key in (
+                bp.KEY_BUTIN_BUGS,
+                bp.KEY_RUBIN_BUGS,
+                bp.KEY_BETA_FEEDBACK,
+            )
+        }
+        return forum in watched
+
+    async def mark_screenshot(
+        self, thread: discord.Thread, message: discord.Message
+    ) -> None:
+        tag = discord.utils.find(
+            lambda t: t.name == bp.TAG_HAS_SCREENSHOT, thread.parent.available_tags
+        )
+        already = tag is not None and tag in thread.applied_tags
+        try:
+            await message.add_reaction("📎")
+        except discord.HTTPException:
+            pass
+
+        if already:
+            # Thanking once per thread, not once per image.
+            return
+
+        if tag is not None:
+            try:
+                await thread.add_tags(tag, reason="discord-bdo: capture reçue")
+            except discord.HTTPException as exc:
+                log.warning("could not tag %s: %s", thread, exc)
+        try:
+            await thread.send(texts.SCREENSHOT_THANKS)
+        except discord.HTTPException:
+            pass
+
+        handler = self.build_handler(thread.guild)
+        await handler.log_staff(
+            texts.LOG_SCREENSHOT.format(
+                link=thread.jump_url, author=message.author.display_name
+            )
         )
 
     async def post_panels(
@@ -102,9 +198,35 @@ class BdoBot(discord.Client):
         channels: dict[str, discord.abc.GuildChannel],
         report: bp.SetupReport,
     ) -> None:
-        """Put (or refresh) the button panel in each help channel."""
+        """Put (or refresh) the button panels and the beta welcome message."""
         self.channels_by_guild[guild.id] = channels
         handler = self.build_handler(guild)
+
+        beta_news = channels.get(bp.KEY_BETA_NEWS)
+        if isinstance(beta_news, discord.TextChannel):
+            await setup_guild._replace_bot_message(
+                beta_news,
+                discord.Embed(
+                    title=texts.BETA_WELCOME_TITLE,
+                    description=texts.BETA_WELCOME_BODY,
+                    colour=discord.Colour(0x6BBF59),
+                ),
+            )
+            report.updated_channels.append(beta_news.name)
+
+        setups = channels.get(bp.KEY_BETA_SETUPS)
+        if isinstance(setups, discord.TextChannel):
+            view = SetupPanel(handler)
+            self.add_view(view)
+            await setup_guild._replace_bot_message(
+                setups, setup_panel_embed(), view=view
+            )
+            report.updated_channels.append(setups.name)
+        else:
+            report.warnings.append(
+                "Panneau de configuration non posté : salon beta-configs introuvable."
+            )
+
         for product in bp.PRODUCTS:
             channel = channels.get(product.help_channel_key)
             if not isinstance(channel, discord.TextChannel):
@@ -118,6 +240,27 @@ class BdoBot(discord.Client):
                 channel, panel_embed(product), view=view
             )
             report.updated_channels.append(channel.name)
+
+
+def _is_staff(interaction: discord.Interaction) -> bool:
+    member = interaction.user
+    if not isinstance(member, discord.Member):
+        return False
+    if member.guild_permissions.administrator:
+        return True
+    return any(role.name in (bp.ROLE_DEV, bp.ROLE_MOD) for role in member.roles)
+
+
+def is_visual(attachment: discord.Attachment) -> bool:
+    """Whether an attachment counts as a screenshot or a screen recording."""
+    content_type = (attachment.content_type or "").lower()
+    if content_type.startswith(IMAGE_TYPES + VIDEO_TYPES):
+        return True
+    # Discord omits content_type on some uploads, so fall back to the name.
+    name = (attachment.filename or "").lower()
+    return name.endswith(
+        (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".mp4", ".mov", ".webm")
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -149,6 +292,40 @@ def register_commands(bot: BdoBot) -> None:
             )
             return
         await interaction.followup.send(f"```\n{report.summary()[:1900]}\n```", ephemeral=True)
+
+    @bot.tree.command(
+        name="config",
+        description="Voir une fiche de configuration / Show a setup card",
+    )
+    @app_commands.describe(membre="Laisser vide pour voir la vôtre / leave empty for yours")
+    async def config_command(
+        interaction: discord.Interaction, membre: discord.Member | None = None
+    ) -> None:
+        target = membre or interaction.user
+        # Anyone can look up their own card; reading someone else's is a staff
+        # action, since it is hardware information about a real person.
+        if membre is not None and not _is_staff(interaction):
+            await interaction.response.send_message(
+                "Seul le staff peut consulter la fiche d'un autre membre.\n"
+                "Only staff can look up someone else's card.",
+                ephemeral=True,
+            )
+            return
+
+        profile = await bot.build_handler(interaction.guild).profile_for(target.id)
+        if profile is None or profile.is_empty:
+            channels = bot.channels_by_guild.get(
+                interaction.guild.id if interaction.guild else 0, {}
+            )
+            channel = channels.get(bp.KEY_BETA_SETUPS)
+            where = channel.mention if channel else "#beta-configs"
+            await interaction.response.send_message(
+                texts.SETUP_EMPTY.format(channel=where), ephemeral=True
+            )
+            return
+        await interaction.response.send_message(
+            embed=views_setup_embed(profile), ephemeral=True
+        )
 
     @bot.tree.command(
         name="aide",
