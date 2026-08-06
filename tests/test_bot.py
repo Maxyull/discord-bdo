@@ -27,7 +27,21 @@ def bot():
 class TestConstruction:
     def test_commands_are_registered_at_construction(self, bot):
         names = {cmd.name for cmd in bot.tree.get_commands()}
-        assert names == {"setup", "aide", "config", "etat"}
+        assert names == {"setup", "aide", "config", "etat", "version", "tester"}
+
+    def test_no_command_collides_with_the_rubin_bot(self, bot):
+        # rubin-bot is already connected to the same server and owns these.
+        # Two bots exposing the same slash command is a coin toss for the user.
+        rubin = {"rapides", "chaine", "quete"}
+        assert {c.name for c in bot.tree.get_commands()} & rubin == set()
+
+    def test_tester_is_gated_on_managing_roles(self, bot):
+        tester = next(c for c in bot.tree.get_commands() if c.name == "tester")
+        assert tester.default_permissions.manage_roles is True
+
+    def test_version_is_open_to_everyone(self, bot):
+        version = next(c for c in bot.tree.get_commands() if c.name == "version")
+        assert version.default_permissions is None
 
     def test_the_status_loop_is_declared_but_not_started_yet(self, bot):
         # It starts in on_ready; starting it in __init__ would need a running

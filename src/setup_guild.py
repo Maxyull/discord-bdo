@@ -141,6 +141,53 @@ def find_channel(
 # --------------------------------------------------------------------------- #
 
 
+#: What the setup pass actually needs. Checked up front rather than discovered
+#: halfway through, when half the server is built and the error message is a
+#: bare Forbidden.
+REQUIRED_PERMISSIONS = (
+    ("manage_channels", "Gérer les salons"),
+    ("manage_roles", "Gérer les rôles"),
+    ("view_channel", "Voir les salons"),
+    ("send_messages", "Envoyer des messages"),
+    ("embed_links", "Intégrer des liens"),
+    ("create_public_threads", "Créer des fils publics"),
+    ("send_messages_in_threads", "Envoyer des messages dans les fils"),
+    ("read_message_history", "Voir l'historique des messages"),
+)
+
+
+def preflight(guild: discord.Guild) -> list[str]:
+    """Reasons the setup would fail, in the member's own words.
+
+    Empty list means go. Being told what is missing beats a half-built server
+    and a Forbidden with no context.
+    """
+    me = guild.me
+    if me is None:  # pragma: no cover - only before the member cache fills
+        return []
+
+    problems: list[str] = []
+    permissions = me.guild_permissions
+    if not permissions.administrator:
+        for name, label in REQUIRED_PERMISSIONS:
+            if not getattr(permissions, name, False):
+                problems.append(texts.PREFLIGHT_MISSING_PERM.format(name=label))
+
+    # Creating roles is not enough: Discord refuses to let the bot manage any
+    # role above its own, and the blueprint's top role is meant to be Dev.
+    highest_bot_role = me.top_role.position if me.top_role else 0
+    blocking = [
+        role
+        for role in guild.roles
+        if role.name in {spec.name for spec in bp.ROLES}
+        and role.position >= highest_bot_role
+    ]
+    if blocking:
+        problems.append(texts.PREFLIGHT_LOW_ROLE)
+
+    return problems
+
+
 async def ensure_roles(guild: discord.Guild, report: bp.SetupReport) -> dict[str, discord.Role]:
     roles: dict[str, discord.Role] = {}
     for spec in bp.ROLES:
