@@ -1,0 +1,12 @@
+services:
+  discord-bdo:
+    build: .
+    container_name: discord-bdo
+    restart: unless-stopped
+    env_file: .env
+    # No exposed port: the bot only makes outbound connections.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
