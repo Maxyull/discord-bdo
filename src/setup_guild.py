@@ -232,30 +232,58 @@ async def order_roles(
     """Put the roles in blueprint order, Dev at the top.
 
     Discord decides who can moderate whom by list position, not by permission
-    name, so a Mod role sitting under Joueur cannot time anyone out. Creation
-    order alone does not guarantee this, hence the explicit pass.
+    name, so a Mod role sitting under Joueur cannot time anyone out.
+
+    What matters is the *effective* order, the one Discord displays and
+    enforces. Freshly created roles all land on position 1 and are then ranked
+    among themselves; asking for absolute positions in that state means asking
+    to be placed above the bot's own role, which Discord refuses. So the order
+    is checked first, and only fixed when it is actually wrong.
     """
     ordered = [roles[spec.name] for spec in bp.ROLES if spec.name in roles]
-    if not ordered:
+    if len(ordered) < 2:
         return
 
-    # Position 0 is @everyone, so the lowest blueprint role starts at 1.
-    positions = {
-        role: index for index, role in enumerate(reversed(ordered), start=1)
-    }
-    if all(role.position == position for role, position in positions.items()):
+    if effective_order_is_correct(guild, ordered):
+        report.skipped.append("ordre des rôles")
         return
 
+    highest_bot_role = guild.me.top_role.position if guild.me and guild.me.top_role else 0
+    # Every target must sit strictly below the bot, otherwise the whole call is
+    # rejected and nothing moves at all.
+    top = highest_bot_role - 1
+    if top < len(ordered):
+        report.warnings.append(
+            "Ordre des rôles non appliqué : le rôle du bot est trop bas pour "
+            f"ranger {len(ordered)} rôles en dessous de lui. Remontez-le en "
+            "haut de la liste, puis relancez /setup."
+        )
+        return
+
+    positions = {role: top - index for index, role in enumerate(ordered)}
     try:
         await guild.edit_role_positions(positions=positions, reason="discord-bdo setup")
     except discord.HTTPException as exc:
         report.warnings.append(
             "Ordre des rôles non appliqué "
             f"({getattr(exc, 'text', None) or exc}). "
-            "Remontez le rôle du bot au-dessus de Dev, puis relancez /setup."
+            "Remontez le rôle du bot en haut de la liste, puis relancez /setup."
         )
         return
     report.updated_roles.extend(spec.name for spec in bp.ROLES if spec.name in roles)
+
+
+def effective_order_is_correct(
+    guild: discord.Guild, ordered: list[discord.Role]
+) -> bool:
+    """Whether Discord already ranks these roles the way the blueprint wants.
+
+    ``guild.roles`` is returned lowest-first, ties already resolved the way
+    Discord resolves them, so reading it beats recomputing the rule.
+    """
+    wanted = [role.id for role in ordered]
+    live = [role.id for role in reversed(guild.roles) if role.id in set(wanted)]
+    return live == wanted
 
 
 async def ensure_community(guild: discord.Guild, report: bp.SetupReport) -> bool:
