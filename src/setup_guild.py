@@ -19,6 +19,19 @@ from . import texts
 log = logging.getLogger("discord-bdo.setup")
 
 
+class PermissionsMissing(RuntimeError):
+    """The bot cannot build the server, with the reasons in plain words.
+
+    Raised rather than returned: a field on the report can be ignored by a
+    caller, and that is exactly how the CLI path ended up building half a
+    server and dying on a bare Forbidden.
+    """
+
+    def __init__(self, problems: list[str]) -> None:
+        self.problems = problems
+        super().__init__("; ".join(problems))
+
+
 # --------------------------------------------------------------------------- #
 # Permission overwrites
 # --------------------------------------------------------------------------- #
@@ -514,7 +527,15 @@ async def post_static_messages(
 
 
 async def run(guild: discord.Guild, *, post_panels=None) -> bp.SetupReport:
-    """Full setup pass. ``post_panels`` is injected by the bot to add buttons."""
+    """Full setup pass. ``post_panels`` is injected by the bot to add buttons.
+
+    Raises :class:`PermissionsMissing` before touching anything when the bot
+    lacks the rights to finish.
+    """
+    problems = preflight(guild)
+    if problems:
+        raise PermissionsMissing(problems)
+
     report = bp.SetupReport()
 
     roles = await ensure_roles(guild, report)

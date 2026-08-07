@@ -119,7 +119,23 @@ async def run_bot(*, setup_then_exit: bool) -> int:
                 return
             for guild in targets:
                 logging.info("setting up %s", guild.name)
-                report = await setup_guild.run(guild, post_panels=bot.post_panels)
+                try:
+                    report = await setup_guild.run(guild, post_panels=bot.post_panels)
+                except setup_guild.PermissionsMissing as missing:
+                    print(
+                        "Droits insuffisants sur "
+                        f"{guild.name}, rien n'a été touché :",
+                        file=sys.stderr,
+                    )
+                    for problem in missing.problems:
+                        print(f"  {problem}", file=sys.stderr)
+                    print(
+                        "\nDonnez au bot un rôle Administrateur placé tout en haut "
+                        "de la liste des rôles, puis relancez.",
+                        file=sys.stderr,
+                    )
+                    result["code"] = 1
+                    continue
                 print(report.summary())
         except Exception:
             logging.exception("setup failed")
