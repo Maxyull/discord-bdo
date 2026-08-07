@@ -105,3 +105,38 @@ class TestRequiredPermissions:
     def test_channel_and_role_management_are_required(self):
         names = {name for name, _ in setup_guild.REQUIRED_PERMISSIONS}
         assert {"manage_channels", "manage_roles"} <= names
+
+
+class TestRunRefusesEarly:
+    """The regression this file exists for.
+
+    preflight() was only wired into the /setup slash command, so `main.py
+    --setup` walked straight past it, created two roles and died on a bare
+    403. The check belongs inside run(), where both callers go through it.
+    """
+
+    async def test_run_raises_before_touching_anything(self):
+        guild = FakeGuild(FakeMember(FakePermissions(), 100))
+        with pytest.raises(setup_guild.PermissionsMissing) as caught:
+            await setup_guild.run(guild)
+        assert caught.value.problems
+
+    async def test_the_reasons_travel_with_the_exception(self):
+        granted = dict(ALL_GRANTED)
+        granted["manage_roles"] = False
+        guild = FakeGuild(FakeMember(FakePermissions(**granted), 100))
+        with pytest.raises(setup_guild.PermissionsMissing) as caught:
+            await setup_guild.run(guild)
+        assert any("Gérer les rôles" in p for p in caught.value.problems)
+
+    async def test_a_role_above_the_bot_also_stops_the_run(self):
+        guild = FakeGuild(
+            FakeMember(FakePermissions(administrator=True), 3),
+            roles=[FakeRole(bp.ROLE_DEV, 8)],
+        )
+        with pytest.raises(setup_guild.PermissionsMissing):
+            await setup_guild.run(guild)
+
+    def test_the_message_lists_every_reason(self):
+        error = setup_guild.PermissionsMissing(["• un", "• deux"])
+        assert "un" in str(error) and "deux" in str(error)
